@@ -889,7 +889,7 @@ function startMic() {
   recognition = new SpeechRecognition();
   recognition.lang = 'nl-NL';
   recognition.continuous = true;
-  recognition.interimResults = true;
+  recognition.interimResults = false;
 
   let finalTranscript = '';
   let silenceTimer = null;
