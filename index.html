@@ -888,52 +888,28 @@ function startMic() {
   if (!SpeechRecognition) { showToast('Spraak niet ondersteund in deze browser'); return; }
   recognition = new SpeechRecognition();
   recognition.lang = 'nl-NL';
-  recognition.continuous = true;
+  recognition.continuous = false;
   recognition.interimResults = false;
-
-  let finalTranscript = '';
-  let silenceTimer = null;
 
   recognition.onstart = () => {
     isRecording = true;
-    finalTranscript = '';
     document.getElementById('mic-btn').classList.add('recording');
     document.getElementById('mic-status').textContent = '🎤 Luisteren...';
   };
 
   recognition.onresult = (e) => {
-    let interim = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) {
-        finalTranscript += e.results[i][0].transcript + ' ';
-      } else {
-        interim += e.results[i][0].transcript;
-      }
-    }
-    document.getElementById('mic-status').textContent = '🎤 ' + (finalTranscript + interim).trim();
-
-    // Reset stilte-timer — verwerk na 2 seconden stilte
-    clearTimeout(silenceTimer);
-    silenceTimer = setTimeout(() => {
-      const tekst = finalTranscript.trim();
-      if (tekst.length > 2) {
-        stopMic();
-        document.getElementById('mic-status').textContent = '"' + tekst + '"';
-        processVoice(tekst);
-      }
-    }, 2000);
+    const transcript = e.results[0][0].transcript;
+    document.getElementById('mic-status').textContent = '"' + transcript + '"';
+    stopMic();
+    processVoice(transcript);
   };
 
   recognition.onerror = (e) => {
-    if (e.error !== 'no-speech') { stopMic(); showToast('Spraak niet herkend'); }
+    if (e.error !== 'no-speech') { stopMic(); showToast('Spraak niet herkend: ' + e.error); }
   };
   recognition.onend = () => {
-    // Herstart automatisch als we nog aan het opnemen zijn
-    if (isRecording) {
-      try { recognition.start(); } catch(e) {}
-    } else {
-      document.getElementById('mic-btn').classList.remove('recording');
-    }
+    isRecording = false;
+    document.getElementById('mic-btn').classList.remove('recording');
   };
   recognition.start();
 }
