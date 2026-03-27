@@ -600,10 +600,12 @@ function renderOverzicht(rows, el) {
   const soon = rows.filter(r => isExpiringSoon(r.Vervaldatum)).length;
   const locs = new Set(rows.map(r => r.Opslagplaats).filter(Boolean)).size;
 
-  let html = `<div class="stats">
-    <div class="stat-card"><div class="stat-num">${rows.length}</div><div class="stat-label">Producten</div></div>
-    <div class="stat-card"><div class="stat-num">${locs}</div><div class="stat-label">Locaties</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--warn)">${expired}</div><div class="stat-label">Verlopen</div></div>
+  let html = `<div class="stats" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
+    <div class="stat-card" style="padding:8px 12px"><div class="stat-num" style="font-size:18px">${rows.length}</div><div class="stat-label">Producten</div></div>
+    <div class="stat-card" style="padding:8px 12px"><div class="stat-num" style="font-size:18px">${locs}</div><div class="stat-label">Locaties</div></div>
+
+
+
   </div>`;
 
   if (expired > 0 || soon > 0) {
@@ -923,9 +925,29 @@ Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
     const text = d.content[0].text.replace(/```json|```/g,'').trim();
     const result = JSON.parse(text);
 
-    document.getElementById('mic-status').textContent = result.antwoord;
-    document.getElementById('mic-status').classList.add('response');
-    setTimeout(() => document.getElementById('mic-status').classList.remove('response'), 3000);
+    // Bouw antwoord met hoeveelheden
+    let antwoord = result.antwoord;
+    if (result.product) {
+      const matches = allData.filter(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
+      if (matches.length > 0) {
+        const details = matches.map(r => r.Opslagplaats + ': ' + r.Aantal + (r.Comment ? ' (' + r.Comment + ')' : '')).join(' | ');
+        antwoord += ' — ' + details;
+      }
+    }
+
+    const statusEl = document.getElementById('mic-status');
+    statusEl.textContent = antwoord;
+    statusEl.classList.add('response');
+
+    // Microfoon blijft actief na zoekresultaat voor vervolgvraag
+    if (result.actie === 'zoek') {
+      setTimeout(() => {
+        statusEl.textContent = antwoord + ' — Spreek in om aan te passen...';
+        startMic();
+      }, 2500);
+    } else {
+      setTimeout(() => statusEl.classList.remove('response'), 4000);
+    }
 
     if (result.uitvoeren) {
       if (result.actie === 'update') {
@@ -962,7 +984,6 @@ Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
     if (result.actie === 'zoek' && result.product) {
       document.getElementById('search').value = result.product;
       onSearch(result.product);
-      showTab('overzicht');
     }
 
   } catch(e) {
