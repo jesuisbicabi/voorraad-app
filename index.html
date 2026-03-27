@@ -871,7 +871,15 @@ async function processVoice(transcript) {
 
   document.getElementById('mic-status').textContent = '⏳ Verwerken...';
 
-  const context = allData.slice(0,50).map(r =>
+  // Zoek eerst lokaal naar relevante producten
+  const woorden = transcript.toLowerCase().split(' ').filter(w => w.length > 2);
+  const gevonden = allData.filter(r => {
+    const tekst = (r.Productnaam + ' ' + r.Opslagplaats + ' ' + r['Categorieën']).toLowerCase();
+    return woorden.some(w => tekst.includes(w));
+  });
+  // Gebruik gevonden producten als context, anders eerste 100
+  const contextData = gevonden.length > 0 ? gevonden : allData.slice(0, 100);
+  const context = contextData.map(r =>
     `${r.Productnaam} | ${r.Opslagplaats} | ${r['Categorieën']} | aantal: ${r.Aantal} | vervalt: ${r.Vervaldatum||'onbekend'}`
   ).join('\n');
 
