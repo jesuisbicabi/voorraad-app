@@ -1087,8 +1087,8 @@ async function processVoice(transcript) {
     }
 
   } catch(e) {
-    document.getElementById('mic-status').textContent = 'Fout bij verwerken. Probeer opnieuw.';
-    console.error(e);
+    document.getElementById('mic-status').textContent = 'Fout: ' + e.message;
+    console.error('Verwerkingsfout:', e);
   }
 }
 
