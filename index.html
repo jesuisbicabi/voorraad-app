@@ -978,32 +978,18 @@ async function processVoice(transcript) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 1000,
-        messages: [{
-          role: 'user',
-          content: `Je bent een voorraadassistent. De gebruiker heeft ingesproken: "${transcript}"
-
-Eerste 50 producten uit de voorraad (voor context):
-${context}
-
-Analyseer wat de gebruiker wil en geef een JSON antwoord in dit formaat:
-{
-  "actie": "update|add|delete|zoek|info|verplaats",
-  "product": "productnaam",
-  "locatie": "huidige/bronlocatie of null",
-  "locatie_nieuw": "nieuwe/doellocatie of null",
-  "aantal": getal of null,
-  "hoeveelheid": getal of null (voor gedeeltelijke verplaatsing, bijv. 300 voor 300 gram),
-  "vervaldatum": "DD-MM-JJJJ of null",
-  "antwoord": "kort Nederlands antwoord aan de gebruiker",
-  "uitvoeren": true of false
-}
-
-Bij "verplaats": gebruik locatie voor bronlocatie en locatie_nieuw voor doellocatie.
-Bij hoeveelheden zoals "300 gram": zet dit in het veld "hoeveelheid".
-Als de gebruiker zegt dat een locatie leeg is én wil verplaatsen: gebruik actie "verplaats", zet "doel_leeg": true, dan wordt de doellocatie eerst op 0 gezet voor de verplaatsing.
-Als de gebruiker zegt dat een locatie leeg is zonder verplaatsing: gebruik actie "update" met aantal 0.
-Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
-        }]
+        messages: [
+          ...gesprekHistory.slice(0, -1).map(function(m) {
+            return {
+              role: m.role,
+              content: m.role === 'user' ? 'Gebruiker zei eerder: "' + m.content + '"' : m.content
+            };
+          }),
+          {
+            role: 'user',
+            content: 'Je bent een voorraadassistent. De gebruiker heeft ingesproken: "' + transcript + '"\n\nRelevante producten:\n' + context + '\n\nGeef een JSON antwoord:\n{\n  "actie": "update|add|delete|zoek|info|verplaats",\n  "product": "productnaam",\n  "locatie": "bronlocatie of null",\n  "locatie_nieuw": "doellocatie of null",\n  "aantal": null,\n  "hoeveelheid": null,\n  "doel_leeg": false,\n  "vervaldatum": null,\n  "antwoord": "kort Nederlands antwoord",\n  "uitvoeren": true\n}\nBij verplaats: locatie=bron, locatie_nieuw=doel. doel_leeg=true als doellocatie leeg is.\nGeef ALLEEN geldige JSON, geen tekst eromheen.'
+          }
+        ]
       })
     });
 
@@ -1090,4 +1076,31 @@ Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
           await verplaatsHoeveelheid(result.product, result.locatie, result.locatie_nieuw, result.hoeveelheid);
         } else if (result.locatie_nieuw) {
           const product = allData.find(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
-          if (product) await updateProduct(p
+          if (product) await updateProduct(product, {Opslagplaats_nieuw: result.locatie_nieuw});
+        }
+      }
+    }
+
+    if (result.actie === 'zoek' && result.product) {
+      document.getElementById('search').value = result.product;
+      onSearch(result.product);
+    }
+
+  } catch(e) {
+    document.getElementById('mic-status').textContent = 'Fout bij verwerken. Probeer opnieuw.';
+    console.error(e);
+  }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Init
+loadData();
+</script>
+</body>
+</html>
