@@ -533,6 +533,7 @@ let allData = [];
 let currentTab = 'overzicht';
 let isRecording = false;
 let recognition = null;
+let gesprekHistory = []; // Onthoudt context van vorige spraakcommando's
 
 // Settings
 function getSettings() {
@@ -949,6 +950,10 @@ async function processVoice(transcript) {
 
   document.getElementById('mic-status').textContent = '⏳ Verwerken...';
 
+  // Voeg toe aan gespreksgeschiedenis (max 6 berichten bewaren)
+  gesprekHistory.push({role: 'user', content: transcript});
+  if (gesprekHistory.length > 6) gesprekHistory = gesprekHistory.slice(-6);
+
   // Zoek eerst lokaal naar relevante producten
   const woorden = transcript.toLowerCase().split(' ').filter(w => w.length > 2);
   const gevonden = allData.filter(r => {
@@ -1006,6 +1011,10 @@ Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
     const text = d.content[0].text.replace(/```json|```/g,'').trim();
     const result = JSON.parse(text);
 
+    // Sla AI antwoord op in history voor context
+    gesprekHistory.push({role: 'assistant', content: result.antwoord});
+    if (gesprekHistory.length > 6) gesprekHistory = gesprekHistory.slice(-6);
+
     // Bouw antwoord met hoeveelheden
     let antwoord = result.antwoord;
     if (result.product) {
@@ -1029,6 +1038,9 @@ Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
     } else {
       setTimeout(() => statusEl.classList.remove('response'), 4000);
     }
+
+    // Reset history na succesvolle actie zodat volgende vraag fris begint
+    if (result.uitvoeren) gesprekHistory = [];
 
     if (result.uitvoeren) {
       if (result.actie === 'update') {
@@ -1078,31 +1090,4 @@ Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
           await verplaatsHoeveelheid(result.product, result.locatie, result.locatie_nieuw, result.hoeveelheid);
         } else if (result.locatie_nieuw) {
           const product = allData.find(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
-          if (product) await updateProduct(product, {Opslagplaats_nieuw: result.locatie_nieuw});
-        }
-      }
-    }
-
-    if (result.actie === 'zoek' && result.product) {
-      document.getElementById('search').value = result.product;
-      onSearch(result.product);
-    }
-
-  } catch(e) {
-    document.getElementById('mic-status').textContent = 'Fout bij verwerken. Probeer opnieuw.';
-    console.error(e);
-  }
-}
-
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// Init
-loadData();
-</script>
-</body>
-</html>
+          if (product) await updateProduct(p
