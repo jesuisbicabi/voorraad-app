@@ -774,14 +774,57 @@ async function updateProduct(r, changes) {
   try {
     const payload = Object.assign({action:'update', Productnaam: r.Productnaam, Opslagplaats: r.Opslagplaats}, changes);
     await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify(payload)});
-    // Update local cache
     const idx = allData.findIndex(x => x.Productnaam === r.Productnaam && x.Opslagplaats === r.Opslagplaats);
     if (idx >= 0) Object.assign(allData[idx], changes);
+    if (changes.Opslagplaats_nieuw) allData[idx].Opslagplaats = changes.Opslagplaats_nieuw;
     localStorage.setItem('voorraad_cache', JSON.stringify(allData));
     closeModal();
     renderTab();
     showToast('✓ Bijgewerkt');
   } catch(e) { showToast('Fout bij opslaan'); }
+}
+
+async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoeveelheid) {
+  try {
+    // Zoek het bronproduct
+    const bron = allData.find(r => 
+      r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) && 
+      r.Opslagplaats.toLowerCase().includes(vanLocatie.toLowerCase())
+    );
+    if (!bron) { showToast('Bronproduct niet gevonden'); return; }
+
+    // Bereken nieuwe hoeveelheid op bronlocatie
+    const huidigAantal = parseFloat(bron.Aantal) || 0;
+    const nieuwAantal = Math.max(0, huidigAantal - hoeveelheid);
+
+    // Update bronlocatie
+    await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({
+      action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats, Aantal: nieuwAantal
+    })});
+
+    // Zoek of product al bestaat op doellocatie
+    const doel = allData.find(r =>
+      r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
+      r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
+    );
+
+    if (doel) {
+      // Voeg toe aan bestaand product op doellocatie
+      const doelNieuw = (parseFloat(doel.Aantal) || 0) + hoeveelheid;
+      await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({
+        action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: doelNieuw
+      })});
+    } else {
+      // Maak nieuw product aan op doellocatie
+      await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({
+        action:'add', Productnaam: bron.Productnaam, Opslagplaats: naarLocatie,
+        Categorieën: bron['Categorieën'], Aantal: hoeveelheid, Comment: bron.Comment || ''
+      })});
+    }
+
+    await loadData();
+    showToast('✓ ' + hoeveelheid + ' verplaatst naar ' + naarLocatie);
+  } catch(e) { showToast('Fout bij verplaatsen: ' + e.message); console.error(e); }
 }
 
 function closeModal(e) {
@@ -939,16 +982,21 @@ ${context}
 
 Analyseer wat de gebruiker wil en geef een JSON antwoord in dit formaat:
 {
-  "actie": "update|add|delete|zoek|info",
+  "actie": "update|add|delete|zoek|info|verplaats",
   "product": "productnaam",
-  "locatie": "locatie of null",
-  "locatie_nieuw": "nieuwe locatie of null",
+  "locatie": "huidige/bronlocatie of null",
+  "locatie_nieuw": "nieuwe/doellocatie of null",
   "aantal": getal of null,
+  "hoeveelheid": getal of null (voor gedeeltelijke verplaatsing, bijv. 300 voor 300 gram),
   "vervaldatum": "DD-MM-JJJJ of null",
   "antwoord": "kort Nederlands antwoord aan de gebruiker",
   "uitvoeren": true of false
 }
 
+Bij "verplaats": gebruik locatie voor bronlocatie en locatie_nieuw voor doellocatie.
+Bij hoeveelheden zoals "300 gram": zet dit in het veld "hoeveelheid".
+Als de gebruiker zegt dat een locatie leeg is én wil verplaatsen: gebruik actie "verplaats", zet "doel_leeg": true, dan wordt de doellocatie eerst op 0 gezet voor de verplaatsing.
+Als de gebruiker zegt dat een locatie leeg is zonder verplaatsing: gebruik actie "update" met aantal 0.
 Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
         }]
       })
@@ -1010,6 +1058,27 @@ Geef ALLEEN geldige JSON terug, geen tekst eromheen.`
         if (product) {
           await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({action:'delete', Productnaam: product.Productnaam, Opslagplaats: product.Opslagplaats})});
           await loadData();
+        }
+      } else if (result.actie === 'verplaats') {
+        // Zet doellocatie eerst op 0 als gebruiker zegt dat die leeg is
+        if (result.doel_leeg && result.locatie_nieuw) {
+          const doelProduct = allData.find(r =>
+            r.Productnaam.toLowerCase().includes(result.product.toLowerCase()) &&
+            r.Opslagplaats.toLowerCase().includes(result.locatie_nieuw.toLowerCase())
+          );
+          if (doelProduct) {
+            await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({
+              action:'update', Productnaam: doelProduct.Productnaam, Opslagplaats: doelProduct.Opslagplaats, Aantal: 0
+            })});
+            const idx = allData.findIndex(x => x.Productnaam === doelProduct.Productnaam && x.Opslagplaats === doelProduct.Opslagplaats);
+            if (idx >= 0) allData[idx].Aantal = 0;
+          }
+        }
+        if (result.hoeveelheid && result.locatie && result.locatie_nieuw) {
+          await verplaatsHoeveelheid(result.product, result.locatie, result.locatie_nieuw, result.hoeveelheid);
+        } else if (result.locatie_nieuw) {
+          const product = allData.find(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
+          if (product) await updateProduct(product, {Opslagplaats_nieuw: result.locatie_nieuw});
         }
       }
     }
