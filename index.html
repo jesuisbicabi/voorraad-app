@@ -994,6 +994,9 @@ async function processVoice(transcript) {
     });
 
     const d = await resp.json();
+    if (!d.content || !d.content[0]) {
+      throw new Error('API fout: ' + JSON.stringify(d).substring(0, 100));
+    }
     const text = d.content[0].text.replace(/```json|```/g,'').trim();
     const result = JSON.parse(text);
 
