@@ -1000,7 +1000,7 @@ async function processVoice(transcript) {
     setTimeout(() => {
       statusEl.classList.remove('response');
       startMic();
-    }, 2500);
+    }, 6000);
 
     // Reset history na succesvolle actie zodat volgende vraag fris begint
     if (result.uitvoeren) { gesprekHistory = []; huidigProduct = null; }
@@ -1058,7 +1058,7 @@ async function processVoice(transcript) {
       }
     }
 
-    if (result.actie === 'zoek' && result.product) {
+    if (result.product) {
       document.getElementById('search').value = result.product;
       onSearch(result.product);
     }
