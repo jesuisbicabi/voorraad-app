@@ -534,6 +534,7 @@ let currentTab = 'overzicht';
 let isRecording = false;
 let recognition = null;
 let gesprekHistory = []; // Onthoudt context van vorige spraakcommando's
+let huidigProduct = null; // Onthoudt welk product centraal staat
 
 // Settings
 function getSettings() {
@@ -963,7 +964,7 @@ async function processVoice(transcript) {
           }),
           {
             role: 'user',
-            content: 'Je bent een voorraadassistent. Gebruik de gespreksgeschiedenis om context te bewaren — als de gebruiker eerder een product noemde, ga er dan van uit dat vervolgvragen over datzelfde product gaan tenzij anders aangegeven.\n\nDe gebruiker heeft ingesproken: "' + transcript + '"\n\nRelevante producten:\n' + context + '\n\nGeef een JSON antwoord:\n{\n  "actie": "update|add|delete|zoek|info|verplaats",\n  "product": "productnaam (gebruik context van vorig bericht als geen product genoemd)",\n  "locatie": "bronlocatie of null",\n  "locatie_nieuw": "doellocatie of null",\n  "aantal": null,\n  "hoeveelheid": null,\n  "doel_leeg": false,\n  "vervaldatum": null,\n  "antwoord": "kort Nederlands antwoord — GEEN opsomming van andere producten op een locatie",\n  "uitvoeren": true\n}\nBij verplaats: locatie=bron, locatie_nieuw=doel. doel_leeg=true als doellocatie leeg is.\nGeef ALLEEN geldige JSON, geen tekst eromheen.'
+            content: 'Je bent een voorraadassistent. Gebruik de gespreksgeschiedenis om context te bewaren — als de gebruiker eerder een product noemde, ga er dan van uit dat vervolgvragen over datzelfde product gaan tenzij anders aangegeven.\n\n' + (huidigProduct ? 'Het gesprek gaat over: ' + huidigProduct + '. Gebruik dit als het product bij vervolgvragen.\n\n' : '') + 'De gebruiker heeft ingesproken: "' + transcript + '"\n\nRelevante producten:\n' + context + '\n\nGeef een JSON antwoord:\n{\n  "actie": "update|add|delete|zoek|info|verplaats",\n  "product": "productnaam (gebruik context van vorig bericht als geen product genoemd)",\n  "locatie": "bronlocatie of null",\n  "locatie_nieuw": "doellocatie of null",\n  "aantal": null,\n  "hoeveelheid": null,\n  "doel_leeg": false,\n  "vervaldatum": null,\n  "antwoord": "kort Nederlands antwoord — GEEN opsomming van andere producten op een locatie",\n  "uitvoeren": true\n}\nBij verplaats: locatie=bron, locatie_nieuw=doel. doel_leeg=true als doellocatie leeg is.\nGeef ALLEEN geldige JSON, geen tekst eromheen.'
           }
         ]
       })
@@ -977,6 +978,7 @@ async function processVoice(transcript) {
     const result = JSON.parse(text);
 
     // Sla AI antwoord op in history voor context
+    if (result.product) huidigProduct = result.product;
     gesprekHistory.push({role: 'assistant', content: result.antwoord});
     if (gesprekHistory.length > 6) gesprekHistory = gesprekHistory.slice(-6);
 
@@ -1001,7 +1003,7 @@ async function processVoice(transcript) {
     }, 2500);
 
     // Reset history na succesvolle actie zodat volgende vraag fris begint
-    if (result.uitvoeren) gesprekHistory = [];
+    if (result.uitvoeren) { gesprekHistory = []; huidigProduct = null; }
 
     if (result.uitvoeren) {
       if (result.actie === 'update') {
