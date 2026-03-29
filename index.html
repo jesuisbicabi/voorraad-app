@@ -963,7 +963,7 @@ async function processVoice(transcript) {
           }),
           {
             role: 'user',
-            content: 'Je bent een voorraadassistent. De gebruiker heeft ingesproken: "' + transcript + '"\n\nRelevante producten:\n' + context + '\n\nGeef een JSON antwoord:\n{\n  "actie": "update|add|delete|zoek|info|verplaats",\n  "product": "productnaam",\n  "locatie": "bronlocatie of null",\n  "locatie_nieuw": "doellocatie of null",\n  "aantal": null,\n  "hoeveelheid": null,\n  "doel_leeg": false,\n  "vervaldatum": null,\n  "antwoord": "kort Nederlands antwoord",\n  "uitvoeren": true\n}\nBij verplaats: locatie=bron, locatie_nieuw=doel. doel_leeg=true als doellocatie leeg is.\nGeef ALLEEN geldige JSON, geen tekst eromheen.'
+            content: 'Je bent een voorraadassistent. Gebruik de gespreksgeschiedenis om context te bewaren — als de gebruiker eerder een product noemde, ga er dan van uit dat vervolgvragen over datzelfde product gaan tenzij anders aangegeven.\n\nDe gebruiker heeft ingesproken: "' + transcript + '"\n\nRelevante producten:\n' + context + '\n\nGeef een JSON antwoord:\n{\n  "actie": "update|add|delete|zoek|info|verplaats",\n  "product": "productnaam (gebruik context van vorig bericht als geen product genoemd)",\n  "locatie": "bronlocatie of null",\n  "locatie_nieuw": "doellocatie of null",\n  "aantal": null,\n  "hoeveelheid": null,\n  "doel_leeg": false,\n  "vervaldatum": null,\n  "antwoord": "kort Nederlands antwoord — GEEN opsomming van andere producten op een locatie",\n  "uitvoeren": true\n}\nBij verplaats: locatie=bron, locatie_nieuw=doel. doel_leeg=true als doellocatie leeg is.\nGeef ALLEEN geldige JSON, geen tekst eromheen.'
           }
         ]
       })
@@ -994,15 +994,11 @@ async function processVoice(transcript) {
     statusEl.textContent = antwoord;
     statusEl.classList.add('response');
 
-    // Microfoon blijft actief na zoekresultaat voor vervolgvraag
-    if (result.actie === 'zoek') {
-      setTimeout(() => {
-        statusEl.textContent = antwoord + ' — Spreek in om aan te passen...';
-        startMic();
-      }, 2500);
-    } else {
-      setTimeout(() => statusEl.classList.remove('response'), 4000);
-    }
+    // Microfoon herstart automatisch na elk antwoord voor vervolgvraag
+    setTimeout(() => {
+      statusEl.classList.remove('response');
+      startMic();
+    }, 2500);
 
     // Reset history na succesvolle actie zodat volgende vraag fris begint
     if (result.uitvoeren) gesprekHistory = [];
