@@ -533,8 +533,8 @@ let allData = [];
 let currentTab = 'overzicht';
 let isRecording = false;
 let recognition = null;
-let gesprekHistory = []; // Onthoudt context van vorige spraakcommando's
-let huidigProduct = null; // Onthoudt welk product centraal staat
+let gesprekHistory = [];
+let huidigProduct = null;
 
 // Settings
 function getSettings() {
@@ -551,7 +551,6 @@ async function loadData() {
     const data = await resp.json();
     if (data.rows) {
       allData = data.rows;
-      // Cache offline
       localStorage.setItem('voorraad_cache', JSON.stringify(allData));
       localStorage.setItem('voorraad_sync', new Date().toLocaleString('nl-NL'));
       document.getElementById('last-sync').textContent = 'Gesync: ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'});
@@ -559,7 +558,6 @@ async function loadData() {
       showToast('✓ Voorraad bijgewerkt');
     }
   } catch(e) {
-    // Load from cache
     const cached = localStorage.getItem('voorraad_cache');
     if (cached) {
       allData = JSON.parse(cached);
@@ -605,9 +603,6 @@ function renderOverzicht(rows, el) {
   let html = `<div class="stats" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
     <div class="stat-card" style="padding:8px 12px"><div class="stat-num" style="font-size:18px">${rows.length}</div><div class="stat-label">Producten</div></div>
     <div class="stat-card" style="padding:8px 12px"><div class="stat-num" style="font-size:18px">${locs}</div><div class="stat-label">Locaties</div></div>
-
-
-
   </div>`;
 
   if (expired > 0 || soon > 0) {
@@ -786,47 +781,98 @@ async function updateProduct(r, changes) {
   } catch(e) { showToast('Fout bij opslaan'); }
 }
 
-async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoeveelheid) {
+// Haal getal (in grammen/ml/stuks) op uit Comment-veld
+// Geeft { waarde: 300, eenheid: 'gr', rest: '' } of null als geen getal gevonden
+function parseHoeveelheid(comment) {
+  if (!comment) return null;
+  // Zoek patroon zoals "300 gr", "1000gr", "500 ml", "2 stuks", "1 kg" etc.
+  const match = comment.match(/^(\d+(?:[.,]\d+)?)\s*(gr|gram|kg|ml|l|stuks?|potten?|zakken?|blikken?|pakken?)?(.*)$/i);
+  if (!match) return null;
+  let waarde = parseFloat(match[1].replace(',', '.'));
+  let eenheid = (match[2] || 'stuks').toLowerCase();
+  let rest = (match[3] || '').trim();
+  // Converteer kg naar gr, l naar ml
+  if (eenheid === 'kg') { waarde = waarde * 1000; eenheid = 'gr'; }
+  if (eenheid === 'l') { waarde = waarde * 1000; eenheid = 'ml'; }
+  return { waarde, eenheid, rest };
+}
+
+// Maak nieuwe comment-string op basis van nieuwe waarde
+function maakNieuweComment(oudComment, nieuweWaarde, eenheid) {
+  if (nieuweWaarde <= 0) return '0 ' + eenheid;
+  return Math.round(nieuweWaarde) + ' ' + eenheid;
+}
+
+async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg) {
   try {
-    // Zoek het bronproduct
-    const bron = allData.find(r => 
-      r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) && 
+    // Zoek bronproduct
+    const bron = allData.find(r =>
+      r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
       r.Opslagplaats.toLowerCase().includes(vanLocatie.toLowerCase())
     );
     if (!bron) { showToast('Bronproduct niet gevonden'); return; }
 
-    // Bereken nieuwe hoeveelheid op bronlocatie
-    const huidigAantal = parseFloat(bron.Aantal) || 0;
-    const nieuwAantal = Math.max(0, huidigAantal - hoeveelheid);
+    // Haal hoeveelheid op uit Comment van bron
+    const bronParsed = parseHoeveelheid(bron.Comment);
+    const eenheid = bronParsed ? bronParsed.eenheid : 'gr';
+    const bronWaarde = bronParsed ? bronParsed.waarde : 0;
+    const nieuweBronWaarde = Math.max(0, bronWaarde - hoeveelheid);
+    const nieuweBronComment = maakNieuweComment(bron.Comment, nieuweBronWaarde, eenheid);
 
-    // Update bronlocatie
+    // Update bron: Comment aanpassen, Aantal blijft hetzelfde
     await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({
-      action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats, Aantal: nieuwAantal
+      action:'update',
+      Productnaam: bron.Productnaam,
+      Opslagplaats: bron.Opslagplaats,
+      Aantal: bron.Aantal,
+      Comment: nieuweBronComment
     })});
+    const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
+    if (bronIdx >= 0) allData[bronIdx].Comment = nieuweBronComment;
 
-    // Zoek of product al bestaat op doellocatie
+    // Zoek doelproduct
     const doel = allData.find(r =>
       r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
       r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
     );
 
     if (doel) {
-      // Voeg toe aan bestaand product op doellocatie
-      const doelNieuw = (parseFloat(doel.Aantal) || 0) + hoeveelheid;
+      // Doellocatie bestaat al: hoeveelheid optellen tenzij doel_leeg=true (dan vanaf 0 beginnen)
+      const doelParsed = parseHoeveelheid(doel.Comment);
+      const doelHuidig = doelLeeg ? 0 : (doelParsed ? doelParsed.waarde : 0);
+      const nieuweDoelWaarde = doelHuidig + hoeveelheid;
+      const nieuweDoelComment = maakNieuweComment(doel.Comment, nieuweDoelWaarde, eenheid);
+
       await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({
-        action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: doelNieuw
+        action:'update',
+        Productnaam: doel.Productnaam,
+        Opslagplaats: doel.Opslagplaats,
+        Aantal: doel.Aantal,
+        Comment: nieuweDoelComment
       })});
+      const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
+      if (doelIdx >= 0) allData[doelIdx].Comment = nieuweDoelComment;
     } else {
-      // Maak nieuw product aan op doellocatie
+      // Doellocatie bestaat nog niet: nieuwe rij aanmaken
+      const nieuweComment = Math.round(hoeveelheid) + ' ' + eenheid;
       await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({
-        action:'add', Productnaam: bron.Productnaam, Opslagplaats: naarLocatie,
-        Categorieën: bron['Categorieën'], Aantal: hoeveelheid, Comment: bron.Comment || ''
+        action:'add',
+        Productnaam: bron.Productnaam,
+        Opslagplaats: naarLocatie,
+        Categorieën: bron['Categorieën'],
+        Aantal: bron.Aantal,
+        Comment: nieuweComment,
+        Vervaldatum: bron.Vervaldatum || ''
       })});
     }
 
+    localStorage.setItem('voorraad_cache', JSON.stringify(allData));
     await loadData();
-    showToast('✓ ' + hoeveelheid + ' verplaatst naar ' + naarLocatie);
-  } catch(e) { showToast('Fout bij verplaatsen: ' + e.message); console.error(e); }
+    showToast('✓ ' + Math.round(hoeveelheid) + ' ' + eenheid + ' verplaatst naar ' + naarLocatie);
+  } catch(e) {
+    showToast('Fout bij verplaatsen: ' + e.message);
+    console.error(e);
+  }
 }
 
 function closeModal(e) {
@@ -927,20 +973,17 @@ async function processVoice(transcript) {
 
   document.getElementById('mic-status').textContent = '⏳ Verwerken...';
 
-  // Voeg toe aan gespreksgeschiedenis (max 6 berichten bewaren)
   gesprekHistory.push({role: 'user', content: transcript});
   if (gesprekHistory.length > 6) gesprekHistory = gesprekHistory.slice(-6);
 
-  // Zoek eerst lokaal naar relevante producten
   const woorden = transcript.toLowerCase().split(' ').filter(w => w.length > 2);
   const gevonden = allData.filter(r => {
     const tekst = (r.Productnaam + ' ' + r.Opslagplaats + ' ' + r['Categorieën']).toLowerCase();
     return woorden.some(w => tekst.includes(w));
   });
-  // Gebruik gevonden producten als context, anders eerste 100
   const contextData = gevonden.length > 0 ? gevonden : allData.slice(0, 100);
   const context = contextData.map(r =>
-    `${r.Productnaam} | ${r.Opslagplaats} | ${r['Categorieën']} | aantal: ${r.Aantal} | vervalt: ${r.Vervaldatum||'onbekend'}`
+    `${r.Productnaam} | ${r.Opslagplaats} | ${r['Categorieën']} | aantal: ${r.Aantal} | hoeveelheid: ${r.Comment||'onbekend'} | vervalt: ${r.Vervaldatum||'onbekend'}`
   ).join('\n');
 
   try {
@@ -964,7 +1007,35 @@ async function processVoice(transcript) {
           }),
           {
             role: 'user',
-            content: 'Je bent een voorraadassistent. Gebruik de gespreksgeschiedenis om context te bewaren — als de gebruiker eerder een product noemde, ga er dan van uit dat vervolgvragen over datzelfde product gaan tenzij anders aangegeven.\n\n' + (huidigProduct ? 'Het gesprek gaat over: ' + huidigProduct + '. Gebruik dit als het product bij vervolgvragen.\n\n' : '') + 'De gebruiker heeft ingesproken: "' + transcript + '"\n\nRelevante producten:\n' + context + '\n\nGeef een JSON antwoord:\n{\n  "actie": "update|add|delete|zoek|info|verplaats",\n  "product": "productnaam (gebruik context van vorig bericht als geen product genoemd)",\n  "locatie": "bronlocatie of null",\n  "locatie_nieuw": "doellocatie of null",\n  "aantal": null,\n  "hoeveelheid": null,\n  "doel_leeg": false,\n  "vervaldatum": null,\n  "antwoord": "kort Nederlands antwoord — GEEN opsomming van andere producten op een locatie",\n  "uitvoeren": true\n}\nBij verplaats: locatie=bron, locatie_nieuw=doel. doel_leeg=true als doellocatie leeg is.\nGeef ALLEEN geldige JSON, geen tekst eromheen.'
+            content: `Je bent een voorraadassistent. Gebruik de gespreksgeschiedenis voor context.
+
+${huidigProduct ? 'Huidig product in gesprek: ' + huidigProduct + '\n' : ''}
+Gebruiker zei: "${transcript}"
+
+Relevante producten (productnaam | locatie | categorie | aantal verpakkingen | hoeveelheid in comment | vervaldatum):
+${context}
+
+BELANGRIJK voor verplaatsen:
+- "hoeveelheid" is altijd een getal in grammen, ml of stuks (bijv. 300 voor "300 gram")
+- "doel_leeg" is true als de gebruiker aangeeft dat de doellocatie leeg/op is
+- Bij verplaatsen wordt de hoeveelheid AFGETROKKEN van de bronlocatie (via Comment-veld)
+- Bij verplaatsen wordt de hoeveelheid OPGETELD bij de doellocatie (tenzij doel_leeg=true, dan vanaf 0)
+- Aantal verpakkingen (Aantal-veld) wordt NIET aangepast bij verplaatsen
+
+Geef een JSON antwoord:
+{
+  "actie": "update|add|delete|zoek|info|verplaats",
+  "product": "productnaam",
+  "locatie": "bronlocatie of null",
+  "locatie_nieuw": "doellocatie of null",
+  "aantal": null,
+  "hoeveelheid": null,
+  "doel_leeg": false,
+  "vervaldatum": null,
+  "antwoord": "kort Nederlands antwoord",
+  "uitvoeren": true
+}
+Geef ALLEEN geldige JSON, geen tekst eromheen.`
           }
         ]
       })
@@ -977,12 +1048,10 @@ async function processVoice(transcript) {
     const text = d.content[0].text.replace(/```json|```/g,'').trim();
     const result = JSON.parse(text);
 
-    // Sla AI antwoord op in history voor context
     if (result.product) huidigProduct = result.product;
     gesprekHistory.push({role: 'assistant', content: result.antwoord});
     if (gesprekHistory.length > 6) gesprekHistory = gesprekHistory.slice(-6);
 
-    // Bouw antwoord met hoeveelheden
     let antwoord = result.antwoord;
     if (result.product) {
       const matches = allData.filter(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
@@ -996,13 +1065,11 @@ async function processVoice(transcript) {
     statusEl.textContent = antwoord;
     statusEl.classList.add('response');
 
-    // Microfoon herstart automatisch na elk antwoord voor vervolgvraag
     setTimeout(() => {
       statusEl.classList.remove('response');
       startMic();
     }, 6000);
 
-    // Reset history na succesvolle actie zodat volgende vraag fris begint
     if (result.uitvoeren) { gesprekHistory = []; huidigProduct = null; }
 
     if (result.uitvoeren) {
@@ -1035,22 +1102,8 @@ async function processVoice(transcript) {
           await loadData();
         }
       } else if (result.actie === 'verplaats') {
-        // Zet doellocatie eerst op 0 als gebruiker zegt dat die leeg is
-        if (result.doel_leeg && result.locatie_nieuw) {
-          const doelProduct = allData.find(r =>
-            r.Productnaam.toLowerCase().includes(result.product.toLowerCase()) &&
-            r.Opslagplaats.toLowerCase().includes(result.locatie_nieuw.toLowerCase())
-          );
-          if (doelProduct) {
-            await fetch(SCRIPT_URL, {method:'POST', body: JSON.stringify({
-              action:'update', Productnaam: doelProduct.Productnaam, Opslagplaats: doelProduct.Opslagplaats, Aantal: 0
-            })});
-            const idx = allData.findIndex(x => x.Productnaam === doelProduct.Productnaam && x.Opslagplaats === doelProduct.Opslagplaats);
-            if (idx >= 0) allData[idx].Aantal = 0;
-          }
-        }
         if (result.hoeveelheid && result.locatie && result.locatie_nieuw) {
-          await verplaatsHoeveelheid(result.product, result.locatie, result.locatie_nieuw, result.hoeveelheid);
+          await verplaatsHoeveelheid(result.product, result.locatie, result.locatie_nieuw, result.hoeveelheid, result.doel_leeg);
         } else if (result.locatie_nieuw) {
           const product = allData.find(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
           if (product) await updateProduct(product, {Opslagplaats_nieuw: result.locatie_nieuw});
