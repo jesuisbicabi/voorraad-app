@@ -1080,6 +1080,7 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
         if (product) {
           const changes = {};
           if (result.aantal !== null) changes.Aantal = result.aantal;
+          if (result.aantal === 0) changes.Comment = '0 gr';
           if (result.locatie_nieuw) changes.Opslagplaats_nieuw = result.locatie_nieuw;
           if (result.vervaldatum) changes.Vervaldatum = result.vervaldatum;
           await updateProduct(product, changes);
