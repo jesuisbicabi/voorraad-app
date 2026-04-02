@@ -770,7 +770,7 @@ function quickUpdate(r) {
 async function updateProduct(r, changes) {
   try {
     const payload = Object.assign({action:'update', Productnaam: r.Productnaam, Opslagplaats: r.Opslagplaats}, changes);
-    await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body: JSON.stringify(payload)});
+    await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(payload)});
     const idx = allData.findIndex(x => x.Productnaam === r.Productnaam && x.Opslagplaats === r.Opslagplaats);
     if (idx >= 0) Object.assign(allData[idx], changes);
     if (changes.Opslagplaats_nieuw) allData[idx].Opslagplaats = changes.Opslagplaats_nieuw;
@@ -825,7 +825,7 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
     console.log('fetch bron versturen...');
 
     // Update bron: Comment aanpassen, Aantal blijft hetzelfde
-    await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body: JSON.stringify({
+    await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
       action:'update',
       Productnaam: bron.Productnaam,
       Opslagplaats: bron.Opslagplaats,
@@ -848,7 +848,7 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
       const nieuweDoelWaarde = doelHuidig + hoeveelheid;
       const nieuweDoelComment = maakNieuweComment(doel.Comment, nieuweDoelWaarde, eenheid);
 
-      await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body: JSON.stringify({
+      await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
         action:'update',
         Productnaam: doel.Productnaam,
         Opslagplaats: doel.Opslagplaats,
@@ -860,7 +860,7 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
     } else {
       // Doellocatie bestaat nog niet: nieuwe rij aanmaken
       const nieuweComment = Math.round(hoeveelheid) + ' ' + eenheid;
-      await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body: JSON.stringify({
+      await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
         action:'add',
         Productnaam: bron.Productnaam,
         Opslagplaats: naarLocatie,
@@ -1117,7 +1117,7 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
           showToast('Product niet gevonden: ' + result.product);
         }
       } else if (result.actie === 'add') {
-        await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body: JSON.stringify({
+        await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
           action:'add',
           Productnaam: result.product,
           Opslagplaats: result.locatie || '',
@@ -1128,7 +1128,7 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
       } else if (result.actie === 'delete') {
         const product = allData.find(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
         if (product) {
-          await fetch(SCRIPT_URL, {method:'POST', mode:'no-cors', body: JSON.stringify({action:'delete', Productnaam: product.Productnaam, Opslagplaats: product.Opslagplaats})});
+          await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({action:'delete', Productnaam: product.Productnaam, Opslagplaats: product.Opslagplaats})});
           await loadData();
         }
       } else if (result.actie === 'verplaats') {
