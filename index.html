@@ -718,7 +718,7 @@ function productItemHTML(r) {
       <div class="product-meta">
         <span>📍 ${r.Opslagplaats || '—'}</span>
         ${r.Vervaldatum ? `<span>📅 ${formatDate(r.Vervaldatum)}</span>` : ''}
-        ${r.Comment ? `<span style="color:var(--text2)">${r.Comment.substring(0,30)}${r.Comment.length>30?'…':''}</span>` : ''}
+        ${r.Comment ? `<span style="color:var(--text2)">${String(r.Comment).substring(0,30)}${String(r.Comment).length>30?'…':''}</span>` : ''}
       </div>
     </div>
     <div class="product-qty">${r.Aantal || 1}</div>
