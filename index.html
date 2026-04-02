@@ -804,12 +804,14 @@ function maakNieuweComment(oudComment, nieuweWaarde, eenheid) {
 }
 
 async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg) {
+  console.log('verplaats aangeroepen:', productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg);
   try {
     // Zoek bronproduct
     const bron = allData.find(r =>
       r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
       r.Opslagplaats.toLowerCase().includes(vanLocatie.toLowerCase())
     );
+    console.log('bron gevonden:', bron ? bron.Productnaam + ' @ ' + bron.Opslagplaats : 'NIET GEVONDEN');
     if (!bron) { showToast('Bronproduct niet gevonden'); return; }
 
     // Haal hoeveelheid op uit Comment van bron
