@@ -971,6 +971,16 @@ async function processVoice(transcript) {
   const apiKey = getSettings().apiKey;
   if (!apiKey) { showToast('Stel eerst je API key in via ⚙ Instellingen'); return; }
 
+  // "Stop" wist de context en begint fris
+  if (transcript.trim().toLowerCase() === 'stop') {
+    gesprekHistory = [];
+    huidigProduct = null;
+    document.getElementById('mic-status').textContent = 'Context gewist. Nieuw product?';
+    document.getElementById('search').value = '';
+    renderTab();
+    return;
+  }
+
   document.getElementById('mic-status').textContent = '⏳ Verwerken...';
 
   gesprekHistory.push({role: 'user', content: transcript});
@@ -1072,9 +1082,10 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
     setTimeout(() => {
       statusEl.classList.remove('response');
       startMic();
-    }, 6000);
+    }, 8000);
 
-    if (result.uitvoeren) { gesprekHistory = []; huidigProduct = null; }
+    // Context wordt NIET automatisch gewist na een actie.
+    // Zeg "stop" om de context te wissen en een nieuw product te beginnen.
 
     if (result.uitvoeren) {
       if (result.actie === 'update') {
