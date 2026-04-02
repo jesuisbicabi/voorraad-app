@@ -891,7 +891,7 @@ function onSearch(q) {
     (r.Productnaam||'').toLowerCase().includes(q) ||
     (r.Opslagplaats||'').toLowerCase().includes(q) ||
     (r['Categorieën']||'').toLowerCase().includes(q) ||
-    (r.Comment||'').toLowerCase().includes(q)
+    String(r.Comment||'').toLowerCase().includes(q)
   );
   renderTab(filtered);
 }
@@ -974,7 +974,7 @@ async function processVoice(transcript) {
   document.getElementById('mic-status').textContent = '⏳ Verwerken...';
 
   gesprekHistory.push({role: 'user', content: transcript});
-  if (gesprekHistory.length > 6) gesprekHistory = gesprekHistory.slice(-6);
+  if (gesprekHistory.length > 8) gesprekHistory = gesprekHistory.slice(-8);
 
   const woorden = transcript.toLowerCase().split(' ').filter(w => w.length > 2);
   const gevonden = allData.filter(r => {
@@ -1015,6 +1015,10 @@ Gebruiker zei: "${transcript}"
 Relevante producten (productnaam | locatie | categorie | aantal verpakkingen | hoeveelheid in comment | vervaldatum):
 ${context}
 
+BELANGRIJK voor "is op" / "leeg":
+- Als iets "op is" of "leeg is": actie "update", aantal: 0 — NOOIT actie "delete"
+- "delete" alleen bij expliciet "verwijder uit de voorraad"
+
 BELANGRIJK voor verplaatsen:
 - "hoeveelheid" is altijd een getal in grammen, ml of stuks (bijv. 300 voor "300 gram")
 - "doel_leeg" is true als de gebruiker aangeeft dat de doellocatie leeg/op is
@@ -1050,7 +1054,7 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
 
     if (result.product) huidigProduct = result.product;
     gesprekHistory.push({role: 'assistant', content: result.antwoord});
-    if (gesprekHistory.length > 6) gesprekHistory = gesprekHistory.slice(-6);
+    if (gesprekHistory.length > 8) gesprekHistory = gesprekHistory.slice(-8);
 
     let antwoord = result.antwoord;
     if (result.product) {
@@ -1074,9 +1078,13 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
 
     if (result.uitvoeren) {
       if (result.actie === 'update') {
-        const product = allData.find(r =>
-          r.Productnaam.toLowerCase().includes(result.product.toLowerCase())
-        );
+        const product = allData.find(r => {
+          const naamMatch = r.Productnaam.toLowerCase().includes(result.product.toLowerCase());
+          if (result.locatie) {
+            return naamMatch && r.Opslagplaats.toLowerCase().includes(result.locatie.toLowerCase());
+          }
+          return naamMatch;
+        });
         if (product) {
           const changes = {};
           if (result.aantal !== null) changes.Aantal = result.aantal;
