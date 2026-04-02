@@ -1093,6 +1093,7 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
     // Context wordt NIET automatisch gewist na een actie.
     // Zeg "stop" om de context te wissen en een nieuw product te beginnen.
 
+    console.log('AI resultaat:', JSON.stringify(result));
     if (result.uitvoeren) {
       if (result.actie === 'update') {
         const product = allData.find(r => {
