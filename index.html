@@ -816,10 +816,13 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
 
     // Haal hoeveelheid op uit Comment van bron
     const bronParsed = parseHoeveelheid(bron.Comment);
+    console.log('bron comment:', bron.Comment, 'parsed:', JSON.stringify(bronParsed));
     const eenheid = bronParsed ? bronParsed.eenheid : 'gr';
     const bronWaarde = bronParsed ? bronParsed.waarde : 0;
     const nieuweBronWaarde = Math.max(0, bronWaarde - hoeveelheid);
     const nieuweBronComment = maakNieuweComment(bron.Comment, nieuweBronWaarde, eenheid);
+    console.log('nieuw bron comment:', nieuweBronComment);
+    console.log('fetch bron versturen...');
 
     // Update bron: Comment aanpassen, Aantal blijft hetzelfde
     await fetch(SCRIPT_URL, {method:'POST', redirect:'follow', body: JSON.stringify({
