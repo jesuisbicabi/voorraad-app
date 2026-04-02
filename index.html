@@ -1069,7 +1069,11 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
     let antwoord = result.antwoord;
     if (result.product) {
       const matches = allData.filter(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
-      if (matches.length > 0) {
+      if (matches.length > 0 && (result.actie === 'zoek' || result.actie === 'info')) {
+        antwoord = matches.length === 1
+          ? matches[0].Productnaam + ' — ' + matches[0].Opslagplaats
+          : matches.length + ' resultaten gevonden voor ' + result.product;
+      } else if (matches.length > 0) {
         const details = matches.map(r => r.Opslagplaats + ': ' + r.Aantal + (r.Comment ? ' (' + r.Comment + ')' : '')).join(' | ');
         antwoord += ' — ' + details;
       }
@@ -1082,7 +1086,7 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
     setTimeout(() => {
       statusEl.classList.remove('response');
       startMic();
-    }, 8000);
+    }, 4000);
 
     // Context wordt NIET automatisch gewist na een actie.
     // Zeg "stop" om de context te wissen en een nieuw product te beginnen.
