@@ -803,8 +803,8 @@ function maakNieuweComment(oudComment, nieuweWaarde, eenheid) {
   return Math.round(nieuweWaarde) + ' ' + eenheid;
 }
 
-async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg) {
-  console.log('verplaats aangeroepen:', productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg);
+async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg, eenheid) {
+  console.log('verplaats aangeroepen:', productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg, eenheid);
   try {
     // Zoek bronproduct
     const bron = allData.find(r =>
@@ -814,66 +814,105 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
     console.log('bron gevonden:', bron ? bron.Productnaam + ' @ ' + bron.Opslagplaats : 'NIET GEVONDEN');
     if (!bron) { showToast('Bronproduct niet gevonden'); return; }
 
-    // Haal hoeveelheid op uit Comment van bron
-    const bronParsed = parseHoeveelheid(bron.Comment);
-    console.log('bron comment:', bron.Comment, 'parsed:', JSON.stringify(bronParsed));
-    const eenheid = bronParsed ? bronParsed.eenheid : 'gr';
-    const bronWaarde = bronParsed ? bronParsed.waarde : 0;
-    const nieuweBronWaarde = Math.max(0, bronWaarde - hoeveelheid);
-    const nieuweBronComment = maakNieuweComment(bron.Comment, nieuweBronWaarde, eenheid);
-    console.log('nieuw bron comment:', nieuweBronComment);
-    console.log('fetch bron versturen...');
+    // gr/ml → Comment aanpassen; discrete eenheden (zakken, potten, etc.) → Aantal aanpassen
+    const gebruiktComment = !eenheid || eenheid === 'gr' || eenheid === 'ml';
 
-    // Update bron: Comment aanpassen, Aantal blijft hetzelfde
-    await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-      action:'update',
-      Productnaam: bron.Productnaam,
-      Opslagplaats: bron.Opslagplaats,
-      Aantal: bron.Aantal,
-      Comment: nieuweBronComment
-    })});
-    const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
-    if (bronIdx >= 0) allData[bronIdx].Comment = nieuweBronComment;
+    if (gebruiktComment) {
+      // --- Comment-modus: hoeveelheid in gr of ml ---
+      const bronParsed = parseHoeveelheid(bron.Comment);
+      console.log('bron comment:', bron.Comment, 'parsed:', JSON.stringify(bronParsed));
+      const commentEenheid = bronParsed ? bronParsed.eenheid : (eenheid || 'gr');
+      const bronWaarde = bronParsed ? bronParsed.waarde : 0;
+      const nieuweBronWaarde = Math.max(0, bronWaarde - hoeveelheid);
+      const nieuweBronComment = maakNieuweComment(bron.Comment, nieuweBronWaarde, commentEenheid);
+      console.log('nieuw bron comment:', nieuweBronComment);
+      console.log('fetch bron versturen...');
 
-    // Zoek doelproduct
-    const doel = allData.find(r =>
-      r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
-      r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
-    );
+      try {
+        const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+          action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats,
+          Aantal: bron.Aantal, Comment: nieuweBronComment
+        })});
+        console.log('fetch bron response:', resp.status, resp.statusText);
+      } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+      const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
+      if (bronIdx >= 0) allData[bronIdx].Comment = nieuweBronComment;
 
-    if (doel) {
-      // Doellocatie bestaat al: hoeveelheid optellen tenzij doel_leeg=true (dan vanaf 0 beginnen)
-      const doelParsed = parseHoeveelheid(doel.Comment);
-      const doelHuidig = doelLeeg ? 0 : (doelParsed ? doelParsed.waarde : 0);
-      const nieuweDoelWaarde = doelHuidig + hoeveelheid;
-      const nieuweDoelComment = maakNieuweComment(doel.Comment, nieuweDoelWaarde, eenheid);
+      const doel = allData.find(r =>
+        r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
+        r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
+      );
+      if (doel) {
+        const doelParsed = parseHoeveelheid(doel.Comment);
+        const doelHuidig = doelLeeg ? 0 : (doelParsed ? doelParsed.waarde : 0);
+        const nieuweDoelComment = maakNieuweComment(doel.Comment, doelHuidig + hoeveelheid, commentEenheid);
+        try {
+          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+            action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats,
+            Aantal: doel.Aantal, Comment: nieuweDoelComment
+          })});
+          console.log('fetch doel response:', resp.status, resp.statusText);
+        } catch(fetchErr) { console.error('fetch doel fout:', fetchErr); throw fetchErr; }
+        const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
+        if (doelIdx >= 0) allData[doelIdx].Comment = nieuweDoelComment;
+      } else {
+        try {
+          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+            action:'add', Productnaam: bron.Productnaam, Opslagplaats: naarLocatie,
+            Categorieën: bron['Categorieën'], Aantal: bron.Aantal,
+            Comment: Math.round(hoeveelheid) + ' ' + commentEenheid, Vervaldatum: bron.Vervaldatum || ''
+          })});
+          console.log('fetch doel nieuw response:', resp.status, resp.statusText);
+        } catch(fetchErr) { console.error('fetch doel nieuw fout:', fetchErr); throw fetchErr; }
+      }
+      showToast('✓ ' + Math.round(hoeveelheid) + ' ' + commentEenheid + ' verplaatst naar ' + naarLocatie);
 
-      await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-        action:'update',
-        Productnaam: doel.Productnaam,
-        Opslagplaats: doel.Opslagplaats,
-        Aantal: doel.Aantal,
-        Comment: nieuweDoelComment
-      })});
-      const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
-      if (doelIdx >= 0) allData[doelIdx].Comment = nieuweDoelComment;
     } else {
-      // Doellocatie bestaat nog niet: nieuwe rij aanmaken
-      const nieuweComment = Math.round(hoeveelheid) + ' ' + eenheid;
-      await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-        action:'add',
-        Productnaam: bron.Productnaam,
-        Opslagplaats: naarLocatie,
-        Categorieën: bron['Categorieën'],
-        Aantal: bron.Aantal,
-        Comment: nieuweComment,
-        Vervaldatum: bron.Vervaldatum || ''
-      })});
+      // --- Aantal-modus: discrete eenheden (zakken, potten, blikken, stuks) ---
+      const nieuwAantalBron = Math.max(0, bron.Aantal - hoeveelheid);
+      console.log('nieuw aantal bron:', nieuwAantalBron);
+      console.log('fetch bron versturen...');
+
+      try {
+        const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+          action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats,
+          Aantal: nieuwAantalBron, Comment: bron.Comment
+        })});
+        console.log('fetch bron response:', resp.status, resp.statusText);
+      } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+      const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
+      if (bronIdx >= 0) allData[bronIdx].Aantal = nieuwAantalBron;
+
+      const doel = allData.find(r =>
+        r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
+        r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
+      );
+      if (doel) {
+        const nieuwAantalDoel = (doelLeeg ? 0 : doel.Aantal) + hoeveelheid;
+        try {
+          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+            action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats,
+            Aantal: nieuwAantalDoel, Comment: doel.Comment
+          })});
+          console.log('fetch doel response:', resp.status, resp.statusText);
+        } catch(fetchErr) { console.error('fetch doel fout:', fetchErr); throw fetchErr; }
+        const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
+        if (doelIdx >= 0) allData[doelIdx].Aantal = nieuwAantalDoel;
+      } else {
+        try {
+          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+            action:'add', Productnaam: bron.Productnaam, Opslagplaats: naarLocatie,
+            Categorieën: bron['Categorieën'], Aantal: hoeveelheid,
+            Comment: bron.Comment, Vervaldatum: bron.Vervaldatum || ''
+          })});
+          console.log('fetch doel nieuw response:', resp.status, resp.statusText);
+        } catch(fetchErr) { console.error('fetch doel nieuw fout:', fetchErr); throw fetchErr; }
+      }
+      showToast('✓ ' + hoeveelheid + ' ' + eenheid + ' verplaatst naar ' + naarLocatie);
     }
 
     localStorage.setItem('voorraad_cache', JSON.stringify(allData));
     await loadData();
-    showToast('✓ ' + Math.round(hoeveelheid) + ' ' + eenheid + ' verplaatst naar ' + naarLocatie);
   } catch(e) {
     showToast('Fout bij verplaatsen: ' + e.message);
     console.error(e);
@@ -1035,11 +1074,14 @@ BELANGRIJK voor "is op" / "leeg":
 - "delete" alleen bij expliciet "verwijder uit de voorraad"
 
 BELANGRIJK voor verplaatsen:
-- "hoeveelheid" is altijd een getal in grammen, ml of stuks (bijv. 300 voor "300 gram")
+- "hoeveelheid" is het getal dat verplaatst wordt (bijv. 300 voor "300 gram", 2 voor "2 zakken")
+- "eenheid" is de eenheid van de hoeveelheid: "gr", "ml", "zak", "pot", "blik", "pak", "stuks", etc.
+- Als eenheid gr of ml is: wordt het Comment-veld aangepast (hoeveelheid in comment aftrekken/optellen)
+- Als eenheid iets anders is (zak, pot, blik, stuks, etc.): wordt het Aantal-veld aangepast
 - "doel_leeg" is true als de gebruiker aangeeft dat de doellocatie leeg/op is
-- Bij verplaatsen wordt de hoeveelheid AFGETROKKEN van de bronlocatie (via Comment-veld)
-- Bij verplaatsen wordt de hoeveelheid OPGETELD bij de doellocatie (tenzij doel_leeg=true, dan vanaf 0)
-- Aantal verpakkingen (Aantal-veld) wordt NIET aangepast bij verplaatsen
+- Voorbeelden: "verplaats 300 gram" → hoeveelheid: 300, eenheid: "gr" (Comment)
+               "verplaats 1 zak" → hoeveelheid: 1, eenheid: "zak" (Aantal)
+               "verplaats 2 potten" → hoeveelheid: 2, eenheid: "pot" (Aantal)
 
 Geef een JSON antwoord:
 {
@@ -1049,6 +1091,7 @@ Geef een JSON antwoord:
   "locatie_nieuw": "doellocatie of null",
   "aantal": null,
   "hoeveelheid": null,
+  "eenheid": null,
   "doel_leeg": false,
   "vervaldatum": null,
   "antwoord": "kort Nederlands antwoord",
@@ -1133,7 +1176,7 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
         }
       } else if (result.actie === 'verplaats') {
         if (result.hoeveelheid && result.locatie && result.locatie_nieuw) {
-          await verplaatsHoeveelheid(result.product, result.locatie, result.locatie_nieuw, result.hoeveelheid, result.doel_leeg);
+          await verplaatsHoeveelheid(result.product, result.locatie, result.locatie_nieuw, result.hoeveelheid, result.doel_leeg, result.eenheid);
         } else if (result.locatie_nieuw) {
           const product = allData.find(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
           if (product) await updateProduct(product, {Opslagplaats_nieuw: result.locatie_nieuw});
