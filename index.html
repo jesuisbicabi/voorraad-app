@@ -377,6 +377,22 @@
   .modal-field:last-of-type { border-bottom: none; }
   .modal-field-label { color: var(--text2); font-size: 13px; }
   .modal-field-value { font-weight: 500; }
+  .modal-field-input {
+    border: none;
+    border-bottom: 1.5px solid var(--border);
+    background: transparent;
+    font-size: 14px;
+    font-weight: 500;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+    text-align: right;
+    padding: 2px 0;
+    outline: none;
+    min-width: 80px;
+    max-width: 55%;
+  }
+  .modal-field-input:focus { border-bottom-color: var(--accent); }
+  .modal-field-input::placeholder { color: var(--text2); font-weight: 400; }
   .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
   .modal-btn {
     flex: 1;
@@ -553,6 +569,7 @@ const ANTHROPIC_KEY_STORAGE = 'voorraad_api_key';
 let allData = [];
 let currentTab = 'overzicht';
 let isRecording = false;
+let modalProduct = null;
 let recognition = null;
 let gesprekHistory = [];
 let huidigProduct = null;
@@ -765,27 +782,64 @@ function categoryEmoji(cat) {
 
 function openModal(r) {
   if (typeof r === 'string') r = JSON.parse(r);
-  const exp = expiryBadge(r.Vervaldatum);
+  modalProduct = r;
+  const dateVal = parseDateToISO(r.Vervaldatum);
   document.getElementById('modal-content').innerHTML = `
     <div class="modal-title">${r.Productnaam}</div>
     <div class="modal-cat">${r['Categorieën'] || ''}</div>
     ${r.Foto ? `<img src="${r.Foto}" style="width:100%;height:160px;object-fit:cover;border-radius:10px;margin-bottom:12px">` : ''}
-    <div class="modal-field"><span class="modal-field-label">Locatie</span><span class="modal-field-value">📍 ${r.Opslagplaats || '—'}</span></div>
-    <div class="modal-field"><span class="modal-field-label">Aantal</span><span class="modal-field-value">${r.Aantal || 1}</span></div>
-    <div class="modal-field"><span class="modal-field-label">Vervaldatum</span><span class="modal-field-value">${r.Vervaldatum ? formatDate(r.Vervaldatum) + ' ' + exp : '—'}</span></div>
-    ${r.Comment ? `<div class="modal-field"><span class="modal-field-label">Notitie</span><span class="modal-field-value" style="font-size:13px;text-align:right;max-width:60%">${r.Comment}</span></div>` : ''}
+    <div class="modal-field">
+      <span class="modal-field-label">Locatie</span>
+      <input class="modal-field-input" id="edit-locatie" value="${(r.Opslagplaats || '').replace(/"/g,'&quot;')}">
+    </div>
+    <div class="modal-field">
+      <span class="modal-field-label">Aantal</span>
+      <input class="modal-field-input" id="edit-aantal" type="number" min="0" step="1" value="${r.Aantal ?? 1}">
+    </div>
+    <div class="modal-field">
+      <span class="modal-field-label">Vervaldatum</span>
+      <input class="modal-field-input" id="edit-vervaldatum" type="date" value="${dateVal}" style="min-width:130px">
+    </div>
+    <div class="modal-field">
+      <span class="modal-field-label">Notitie</span>
+      <input class="modal-field-input" id="edit-notitie" value="${(r.Comment || '').replace(/"/g,'&quot;')}" placeholder="—">
+    </div>
     <div class="modal-actions">
       <button class="modal-btn secondary" onclick="closeModal()">Sluiten</button>
-      <button class="modal-btn primary" onclick="quickUpdate(${JSON.stringify(r).replace(/"/g,'&quot;')})">Bijwerken</button>
+      <button class="modal-btn primary" onclick="saveModal()">Bijwerken</button>
     </div>
   `;
   document.getElementById('modal-overlay').classList.add('open');
 }
 
-function quickUpdate(r) {
-  const nieuw = prompt(`Nieuw aantal voor "${r.Productnaam}" (nu: ${r.Aantal}):`);
-  if (nieuw === null) return;
-  updateProduct(r, {Aantal: parseFloat(nieuw)});
+function parseDateToISO(s) {
+  const d = parseDate(s);
+  if (!d || isNaN(d)) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function saveModal() {
+  const r = modalProduct;
+  if (!r) return;
+  const locatie = document.getElementById('edit-locatie').value.trim();
+  const aantal = parseFloat(document.getElementById('edit-aantal').value);
+  const dateISO = document.getElementById('edit-vervaldatum').value; // yyyy-mm-dd
+  const notitie = document.getElementById('edit-notitie').value.trim();
+
+  const changes = {};
+  if (locatie !== (r.Opslagplaats || '')) changes.Opslagplaats_nieuw = locatie;
+  if (!isNaN(aantal) && aantal !== r.Aantal) changes.Aantal = aantal;
+  if (dateISO) {
+    const [y, m, d] = dateISO.split('-');
+    const formatted = `${+d}-${+m}-${y}`;
+    if (formatted !== r.Vervaldatum) changes.Vervaldatum = formatted;
+  } else if (r.Vervaldatum) {
+    changes.Vervaldatum = '';
+  }
+  if (notitie !== (r.Comment || '')) changes.Comment = notitie;
+
+  if (Object.keys(changes).length === 0) { closeModal(); return; }
+  updateProduct(r, changes);
 }
 
 async function updateProduct(r, changes) {
