@@ -903,15 +903,25 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
       console.log('nieuw bron comment:', nieuweBronComment);
       console.log('fetch bron versturen...');
 
-      try {
-        const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-          action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats,
-          Aantal: bron.Aantal, Comment: nieuweBronComment
-        })});
-        console.log('fetch bron response:', resp.status, resp.statusText);
-      } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
       const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
-      if (bronIdx >= 0) allData[bronIdx].Comment = nieuweBronComment;
+      if (nieuweBronWaarde === 0) {
+        try {
+          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+            action:'delete', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats
+          })});
+          console.log('fetch bron delete response:', resp.status, resp.statusText);
+        } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+        if (bronIdx >= 0) allData.splice(bronIdx, 1);
+      } else {
+        try {
+          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+            action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats,
+            Aantal: bron.Aantal, Comment: nieuweBronComment
+          })});
+          console.log('fetch bron response:', resp.status, resp.statusText);
+        } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+        if (bronIdx >= 0) allData[bronIdx].Comment = nieuweBronComment;
+      }
 
       const doel = allData.find(r =>
         r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
@@ -948,15 +958,25 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
       console.log('nieuw aantal bron:', nieuwAantalBron);
       console.log('fetch bron versturen...');
 
-      try {
-        const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-          action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats,
-          Aantal: nieuwAantalBron, Comment: bron.Comment
-        })});
-        console.log('fetch bron response:', resp.status, resp.statusText);
-      } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
       const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
-      if (bronIdx >= 0) allData[bronIdx].Aantal = nieuwAantalBron;
+      if (nieuwAantalBron === 0) {
+        try {
+          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+            action:'delete', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats
+          })});
+          console.log('fetch bron delete response:', resp.status, resp.statusText);
+        } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+        if (bronIdx >= 0) allData.splice(bronIdx, 1);
+      } else {
+        try {
+          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
+            action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats,
+            Aantal: nieuwAantalBron, Comment: bron.Comment
+          })});
+          console.log('fetch bron response:', resp.status, resp.statusText);
+        } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+        if (bronIdx >= 0) allData[bronIdx].Aantal = nieuwAantalBron;
+      }
 
       const doel = allData.find(r =>
         r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
