@@ -570,6 +570,8 @@ let allData = [];
 let currentTab = 'overzicht';
 let isRecording = false;
 let modalProduct = null;
+let leestijdTimer = null;
+let stilleRecognition = null;
 let recognition = null;
 let gesprekHistory = [];
 let huidigProduct = null;
@@ -887,10 +889,10 @@ function maakNieuweComment(oudComment, nieuweWaarde, eenheid) {
 async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg, eenheid) {
   console.log('verplaats aangeroepen:', productnaam, vanLocatie, naarLocatie, hoeveelheid, doelLeeg, eenheid);
   try {
-    // Zoek bronproduct
+    // Zoek bronproduct (locatie optioneel)
     const bron = allData.find(r =>
       r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
-      r.Opslagplaats.toLowerCase().includes(vanLocatie.toLowerCase())
+      (!vanLocatie || r.Opslagplaats.toLowerCase().includes(vanLocatie.toLowerCase()))
     );
     console.log('bron gevonden:', bron ? bron.Productnaam + ' @ ' + bron.Opslagplaats : 'NIET GEVONDEN');
     if (!bron) { showToast('Bronproduct niet gevonden'); return; }
@@ -1037,7 +1039,7 @@ function onCmdKey(e) {
   const val = e.target.value.trim();
   if (!val) return;
   e.target.value = '';
-  processCommand(val);
+  processVoice(val);
 }
 
 // Voice
@@ -1079,8 +1081,38 @@ function startMic() {
 
 function stopMic() {
   if (recognition) recognition.stop();
+  if (stilleRecognition) { stilleRecognition.stop(); stilleRecognition = null; }
   isRecording = false;
   document.getElementById('mic-btn').classList.remove('recording');
+}
+
+function startMicStil() {
+  if (isRecording || stilleRecognition) return;
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+  stilleRecognition = new SpeechRecognition();
+  stilleRecognition.lang = 'nl-NL';
+  stilleRecognition.continuous = false;
+  stilleRecognition.interimResults = false;
+  stilleRecognition.onresult = (e) => {
+    const transcript = e.results[0][0].transcript.trim();
+    stilleRecognition = null;
+    if (leestijdTimer) { clearTimeout(leestijdTimer); leestijdTimer = null; }
+    const statusEl = document.getElementById('mic-status');
+    statusEl.classList.remove('response');
+    if (transcript.toLowerCase() === 'vlug') {
+      startMic();
+    } else {
+      statusEl.textContent = '"' + transcript + '"';
+      processVoice(transcript);
+    }
+  };
+  stilleRecognition.onerror = () => { stilleRecognition = null; };
+  stilleRecognition.onend = () => {
+    stilleRecognition = null;
+    if (leestijdTimer) setTimeout(() => { if (leestijdTimer) startMicStil(); }, 300);
+  };
+  stilleRecognition.start();
 }
 
 async function processVoice(transcript) {
@@ -1147,6 +1179,8 @@ BELANGRIJK voor "is op" / "leeg":
 - "delete" alleen bij expliciet "verwijder uit de voorraad"
 
 BELANGRIJK voor verplaatsen:
+- Voer verplaatsen ALTIJD uit in één commando — gebruik de productlijst om ontbrekende info aan te vullen
+- "locatie" (bronlocatie): vul dit altijd in vanuit de productlijst als de gebruiker het niet noemt
 - "hoeveelheid" is het getal dat verplaatst wordt (bijv. 300 voor "300 gram", 2 voor "2 zakken")
 - "eenheid" is de eenheid van de hoeveelheid: "gr", "ml", "zak", "pot", "blik", "pak", "stuks", etc.
 - Als eenheid gr of ml is: wordt het Comment-veld aangepast (hoeveelheid in comment aftrekken/optellen)
@@ -1205,10 +1239,14 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
     statusEl.classList.add('response');
 
     const leestijd = Math.max(4000, Math.min(antwoord.length * 50, 12000));
-    setTimeout(() => {
+    if (leestijdTimer) clearTimeout(leestijdTimer);
+    leestijdTimer = setTimeout(() => {
+      leestijdTimer = null;
+      if (stilleRecognition) { stilleRecognition.stop(); stilleRecognition = null; }
       statusEl.classList.remove('response');
       startMic();
     }, leestijd);
+    setTimeout(() => { if (leestijdTimer) startMicStil(); }, 600);
 
     // Context wordt NIET automatisch gewist na een actie.
     // Zeg "stop" om de context te wissen en een nieuw product te beginnen.
@@ -1249,10 +1287,13 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
           await loadData();
         }
       } else if (result.actie === 'verplaats') {
-        if (result.hoeveelheid && result.locatie && result.locatie_nieuw) {
-          await verplaatsHoeveelheid(result.product, result.locatie, result.locatie_nieuw, result.hoeveelheid, result.doel_leeg, result.eenheid);
+        if (result.hoeveelheid && result.locatie_nieuw) {
+          await verplaatsHoeveelheid(result.product, result.locatie || '', result.locatie_nieuw, result.hoeveelheid, result.doel_leeg, result.eenheid);
         } else if (result.locatie_nieuw) {
-          const product = allData.find(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
+          const product = allData.find(r => {
+            const naamMatch = r.Productnaam.toLowerCase().includes(result.product.toLowerCase());
+            return result.locatie ? naamMatch && r.Opslagplaats.toLowerCase().includes(result.locatie.toLowerCase()) : naamMatch;
+          });
           if (product) await updateProduct(product, {Opslagplaats_nieuw: result.locatie_nieuw});
         }
       }
