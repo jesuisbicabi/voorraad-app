@@ -571,7 +571,6 @@ let currentTab = 'overzicht';
 let isRecording = false;
 let modalProduct = null;
 let leestijdTimer = null;
-let stilleRecognition = null;
 let recognition = null;
 let gesprekHistory = [];
 let huidigProduct = null;
@@ -1049,6 +1048,7 @@ function toggleMic() {
 }
 
 function startMic() {
+  if (isRecording) return;
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) { showToast('Spraak niet ondersteund in deze browser'); return; }
   recognition = new SpeechRecognition();
@@ -1059,65 +1059,48 @@ function startMic() {
   recognition.onstart = () => {
     isRecording = true;
     document.getElementById('mic-btn').classList.add('recording');
-    document.getElementById('mic-status').textContent = '🎤 Luisteren...';
+    // Stil modus: leestijdTimer loopt nog → antwoord tekst bewaren
+    if (!leestijdTimer) document.getElementById('mic-status').textContent = '🎤 Luisteren...';
   };
 
   recognition.onresult = (e) => {
     const transcript = e.results[0][0].transcript;
-    document.getElementById('mic-status').textContent = '"' + transcript + '"';
     stopMic();
+    if (leestijdTimer) { clearTimeout(leestijdTimer); leestijdTimer = null; }
+    document.getElementById('mic-status').classList.remove('response');
+    document.getElementById('mic-status').textContent = '"' + transcript + '"';
     processVoice(transcript);
   };
 
   recognition.onerror = (e) => {
-    if (e.error !== 'no-speech') { stopMic(); showToast('Spraak niet herkend: ' + e.error); }
+    if (e.error !== 'no-speech') { stopMic(); if (!leestijdTimer) showToast('Spraak niet herkend: ' + e.error); }
   };
+
   recognition.onend = () => {
     isRecording = false;
     document.getElementById('mic-btn').classList.remove('recording');
+    // Stil modus: herstart automatisch zolang leestijdTimer nog loopt
+    if (leestijdTimer) setTimeout(() => { if (leestijdTimer && !isRecording) startMic(); }, 300);
   };
+
   recognition.start();
 }
 
 function stopMic() {
   if (recognition) recognition.stop();
-  if (stilleRecognition) { stilleRecognition.stop(); stilleRecognition = null; }
   isRecording = false;
   document.getElementById('mic-btn').classList.remove('recording');
-}
-
-function startMicStil() {
-  if (isRecording || stilleRecognition) return;
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) return;
-  stilleRecognition = new SpeechRecognition();
-  stilleRecognition.lang = 'nl-NL';
-  stilleRecognition.continuous = false;
-  stilleRecognition.interimResults = false;
-  stilleRecognition.onresult = (e) => {
-    const transcript = e.results[0][0].transcript.trim();
-    stilleRecognition = null;
-    if (leestijdTimer) { clearTimeout(leestijdTimer); leestijdTimer = null; }
-    const statusEl = document.getElementById('mic-status');
-    statusEl.classList.remove('response');
-    if (transcript.toLowerCase() === 'vlug') {
-      startMic();
-    } else {
-      statusEl.textContent = '"' + transcript + '"';
-      processVoice(transcript);
-    }
-  };
-  stilleRecognition.onerror = () => { stilleRecognition = null; };
-  stilleRecognition.onend = () => {
-    stilleRecognition = null;
-    if (leestijdTimer) setTimeout(() => { if (leestijdTimer) startMicStil(); }, 300);
-  };
-  stilleRecognition.start();
 }
 
 async function processVoice(transcript) {
   const apiKey = getSettings().apiKey;
   if (!apiKey) { showToast('Stel eerst je API key in via ⚙ Instellingen'); return; }
+
+  // "Vlug" slaat resterende leestijd over en start mic direct
+  if (transcript.trim().toLowerCase() === 'vlug') {
+    startMic();
+    return;
+  }
 
   // "Stop" wist de context en begint fris
   if (transcript.trim().toLowerCase() === 'stop') {
@@ -1242,11 +1225,12 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
     if (leestijdTimer) clearTimeout(leestijdTimer);
     leestijdTimer = setTimeout(() => {
       leestijdTimer = null;
-      if (stilleRecognition) { stilleRecognition.stop(); stilleRecognition = null; }
       statusEl.classList.remove('response');
-      startMic();
+      if (!isRecording) startMic();
+      else statusEl.textContent = '🎤 Luisteren...';
     }, leestijd);
-    setTimeout(() => { if (leestijdTimer) startMicStil(); }, 600);
+    // Start mic stil (antwoord blijft zichtbaar) — vangt "vlug" op
+    setTimeout(() => { if (leestijdTimer && !isRecording) startMic(); }, 600);
 
     // Context wordt NIET automatisch gewist na een actie.
     // Zeg "stop" om de context te wissen en een nieuw product te beginnen.
