@@ -77,7 +77,8 @@ function addRow(sheet, data) {
 function deleteRow(sheet, data) {
   var values = sheet.getDataRange().getValues();
   for (var i = 1; i < values.length; i++) {
-    if (values[i][2] === data.Productnaam && values[i][0] === data.Opslagplaats) {
+    if (values[i][2].toString().toLowerCase() === data.Productnaam.toString().toLowerCase() &&
+        values[i][0].toString().toLowerCase() === data.Opslagplaats.toString().toLowerCase()) {
       sheet.deleteRow(i+1);
       return {success: true};
     }

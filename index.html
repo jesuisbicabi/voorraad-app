@@ -842,18 +842,24 @@ function saveModal() {
   updateProduct(r, changes);
 }
 
+async function fetchGAS(payload) {
+  const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(payload)});
+  const json = await resp.json().catch(() => ({}));
+  if (json.error) throw new Error(json.error);
+  return json;
+}
+
 async function updateProduct(r, changes) {
   try {
-    const payload = Object.assign({action:'update', Productnaam: r.Productnaam, Opslagplaats: r.Opslagplaats}, changes);
-    await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(payload)});
+    await fetchGAS(Object.assign({action:'update', Productnaam: r.Productnaam, Opslagplaats: r.Opslagplaats}, changes));
     const idx = allData.findIndex(x => x.Productnaam === r.Productnaam && x.Opslagplaats === r.Opslagplaats);
     if (idx >= 0) Object.assign(allData[idx], changes);
-    if (changes.Opslagplaats_nieuw) allData[idx].Opslagplaats = changes.Opslagplaats_nieuw;
+    if (changes.Opslagplaats_nieuw && idx >= 0) allData[idx].Opslagplaats = changes.Opslagplaats_nieuw;
     localStorage.setItem('voorraad_cache', JSON.stringify(allData));
     closeModal();
     renderTab();
     showToast('✓ Bijgewerkt');
-  } catch(e) { showToast('Fout bij opslaan'); }
+  } catch(e) { showToast('Fout bij opslaan: ' + e.message); }
 }
 
 // Haal getal (in grammen/ml/stuks) op uit Comment-veld
@@ -895,34 +901,22 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
     if (gebruiktComment) {
       // --- Comment-modus: hoeveelheid in gr of ml ---
       const bronParsed = parseHoeveelheid(bron.Comment);
-      console.log('bron comment:', bron.Comment, 'parsed:', JSON.stringify(bronParsed));
       const commentEenheid = bronParsed ? bronParsed.eenheid : (eenheid || 'gr');
       const bronWaarde = bronParsed ? bronParsed.waarde : 0;
       const nieuweBronWaarde = Math.max(0, bronWaarde - hoeveelheid);
       const nieuweBronComment = maakNieuweComment(bron.Comment, nieuweBronWaarde, commentEenheid);
-      console.log('nieuw bron comment:', nieuweBronComment);
-      console.log('fetch bron versturen...');
 
+      // Bron bijwerken of verwijderen
       const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
       if (nieuweBronWaarde === 0) {
-        try {
-          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-            action:'delete', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats
-          })});
-          console.log('fetch bron delete response:', resp.status, resp.statusText);
-        } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+        await fetchGAS({action:'delete', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats});
         if (bronIdx >= 0) allData.splice(bronIdx, 1);
       } else {
-        try {
-          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-            action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats,
-            Aantal: bron.Aantal, Comment: nieuweBronComment
-          })});
-          console.log('fetch bron response:', resp.status, resp.statusText);
-        } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+        await fetchGAS({action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats, Aantal: bron.Aantal, Comment: nieuweBronComment});
         if (bronIdx >= 0) allData[bronIdx].Comment = nieuweBronComment;
       }
 
+      // Doel bijwerken of aanmaken
       const doel = allData.find(r =>
         r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
         r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
@@ -931,82 +925,50 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
         const doelParsed = parseHoeveelheid(doel.Comment);
         const doelHuidig = doelLeeg ? 0 : (doelParsed ? doelParsed.waarde : 0);
         const nieuweDoelComment = maakNieuweComment(doel.Comment, doelHuidig + hoeveelheid, commentEenheid);
-        try {
-          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-            action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats,
-            Aantal: doel.Aantal, Comment: nieuweDoelComment
-          })});
-          console.log('fetch doel response:', resp.status, resp.statusText);
-        } catch(fetchErr) { console.error('fetch doel fout:', fetchErr); throw fetchErr; }
+        await fetchGAS({action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: doel.Aantal, Comment: nieuweDoelComment});
         const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
         if (doelIdx >= 0) allData[doelIdx].Comment = nieuweDoelComment;
       } else {
-        try {
-          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-            action:'add', Productnaam: bron.Productnaam, Opslagplaats: naarLocatie,
-            Categorieën: bron['Categorieën'], Aantal: bron.Aantal,
-            Comment: Math.round(hoeveelheid) + ' ' + commentEenheid, Vervaldatum: bron.Vervaldatum || ''
-          })});
-          console.log('fetch doel nieuw response:', resp.status, resp.statusText);
-        } catch(fetchErr) { console.error('fetch doel nieuw fout:', fetchErr); throw fetchErr; }
+        const nieuweRij = {Productnaam: bron.Productnaam, Opslagplaats: naarLocatie, 'Categorieën': bron['Categorieën'], Aantal: bron.Aantal, Comment: Math.round(hoeveelheid) + ' ' + commentEenheid, Vervaldatum: bron.Vervaldatum || ''};
+        await fetchGAS({action:'add', ...nieuweRij});
+        allData.push(nieuweRij);
       }
       showToast('✓ ' + Math.round(hoeveelheid) + ' ' + commentEenheid + ' verplaatst naar ' + naarLocatie);
 
     } else {
       // --- Aantal-modus: discrete eenheden (zakken, potten, blikken, stuks) ---
       const nieuwAantalBron = Math.max(0, bron.Aantal - hoeveelheid);
-      console.log('nieuw aantal bron:', nieuwAantalBron);
-      console.log('fetch bron versturen...');
 
+      // Bron bijwerken of verwijderen
       const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
       if (nieuwAantalBron === 0) {
-        try {
-          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-            action:'delete', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats
-          })});
-          console.log('fetch bron delete response:', resp.status, resp.statusText);
-        } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+        await fetchGAS({action:'delete', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats});
         if (bronIdx >= 0) allData.splice(bronIdx, 1);
       } else {
-        try {
-          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-            action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats,
-            Aantal: nieuwAantalBron, Comment: bron.Comment
-          })});
-          console.log('fetch bron response:', resp.status, resp.statusText);
-        } catch(fetchErr) { console.error('fetch bron fout:', fetchErr); throw fetchErr; }
+        await fetchGAS({action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats, Aantal: nieuwAantalBron, Comment: bron.Comment});
         if (bronIdx >= 0) allData[bronIdx].Aantal = nieuwAantalBron;
       }
 
+      // Doel bijwerken of aanmaken
       const doel = allData.find(r =>
         r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
         r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
       );
       if (doel) {
         const nieuwAantalDoel = (doelLeeg ? 0 : doel.Aantal) + hoeveelheid;
-        try {
-          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-            action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats,
-            Aantal: nieuwAantalDoel, Comment: doel.Comment
-          })});
-          console.log('fetch doel response:', resp.status, resp.statusText);
-        } catch(fetchErr) { console.error('fetch doel fout:', fetchErr); throw fetchErr; }
+        await fetchGAS({action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: nieuwAantalDoel, Comment: doel.Comment});
         const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
         if (doelIdx >= 0) allData[doelIdx].Aantal = nieuwAantalDoel;
       } else {
-        try {
-          const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify({
-            action:'add', Productnaam: bron.Productnaam, Opslagplaats: naarLocatie,
-            Categorieën: bron['Categorieën'], Aantal: hoeveelheid,
-            Comment: bron.Comment, Vervaldatum: bron.Vervaldatum || ''
-          })});
-          console.log('fetch doel nieuw response:', resp.status, resp.statusText);
-        } catch(fetchErr) { console.error('fetch doel nieuw fout:', fetchErr); throw fetchErr; }
+        const nieuweRij = {Productnaam: bron.Productnaam, Opslagplaats: naarLocatie, 'Categorieën': bron['Categorieën'], Aantal: hoeveelheid, Comment: bron.Comment, Vervaldatum: bron.Vervaldatum || ''};
+        await fetchGAS({action:'add', ...nieuweRij});
+        allData.push(nieuweRij);
       }
       showToast('✓ ' + hoeveelheid + ' ' + eenheid + ' verplaatst naar ' + naarLocatie);
     }
 
     localStorage.setItem('voorraad_cache', JSON.stringify(allData));
+    renderTab();
     await loadData();
   } catch(e) {
     showToast('Fout bij verplaatsen: ' + e.message);
