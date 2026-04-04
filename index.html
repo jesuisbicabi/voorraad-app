@@ -1112,6 +1112,7 @@ async function processVoice(transcript) {
     document.getElementById('mic-status').textContent = 'Context gewist. Nieuw product?';
     document.getElementById('search').value = '';
     renderTab();
+    setTimeout(() => startMic(), 1500);
     return;
   }
 
@@ -1221,10 +1222,11 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
     statusEl.textContent = antwoord;
     statusEl.classList.add('response');
 
+    const leestijd = Math.max(4000, Math.min(antwoord.length * 50, 12000));
     setTimeout(() => {
       statusEl.classList.remove('response');
       startMic();
-    }, 4000);
+    }, leestijd);
 
     // Context wordt NIET automatisch gewist na een actie.
     // Zeg "stop" om de context te wissen en een nieuw product te beginnen.
