@@ -32,7 +32,7 @@
     background: var(--bg);
     color: var(--text);
     min-height: 100vh;
-    padding-bottom: 80px;
+    padding-bottom: 110px;
   }
 
   /* Header */
@@ -305,8 +305,26 @@
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.08); }
   }
-  .mic-status {
+  .mic-right {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .cmd-input {
+    width: 100%;
+    padding: 7px 11px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    font-size: 14px;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+    outline: none;
+  }
+  .cmd-input:focus { border-color: var(--accent2); }
+  .cmd-input::placeholder { color: var(--text2); }
+  .mic-status {
     font-size: 13px;
     color: var(--text2);
     line-height: 1.4;
@@ -511,7 +529,10 @@
       <line x1="8" y1="23" x2="16" y2="23"/>
     </svg>
   </button>
-  <div class="mic-status" id="mic-status">Tik op de microfoon om in te spreken</div>
+  <div class="mic-right">
+    <input class="cmd-input" id="cmd-input" placeholder="Of typ een opdracht..." onkeydown="onCmdKey(event)">
+    <div class="mic-status" id="mic-status">Tik op de microfoon om in te spreken</div>
+  </div>
 </div>
 
 <!-- Modal -->
@@ -943,13 +964,20 @@ function onSearch(q) {
 // Date helpers
 function parseDate(s) {
   if (!s) return null;
-  const parts = s.toString().split('-');
-  if (parts.length === 3) return new Date(parts[2], parts[1]-1, parts[0]);
+  const str = s.toString().trim();
+  // ISO: yyyy-mm-dd (ook met tijd, bijv. vanuit Google Sheets)
+  if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const parts = str.substring(0, 10).split('-');
+    return new Date(+parts[0], +parts[1]-1, +parts[2]);
+  }
+  // d-m-yyyy
+  const parts = str.split('-');
+  if (parts.length === 3) return new Date(+parts[2], +parts[1]-1, +parts[0]);
   return null;
 }
 function formatDate(s) {
   const d = parseDate(s);
-  if (!d) return s;
+  if (!d || isNaN(d)) return s;
   return d.toLocaleDateString('nl-NL', {day:'numeric',month:'short',year:'numeric'});
 }
 function isExpired(s) {
@@ -966,6 +994,14 @@ function expiryBadge(s) {
   if (isExpired(s)) return `<span class="expiry-badge expired">Verlopen</span>`;
   if (isExpiringSoon(s)) return `<span class="expiry-badge soon">Binnenkort</span>`;
   return `<span class="expiry-badge ok">OK</span>`;
+}
+
+function onCmdKey(e) {
+  if (e.key !== 'Enter') return;
+  const val = e.target.value.trim();
+  if (!val) return;
+  e.target.value = '';
+  processCommand(val);
 }
 
 // Voice
