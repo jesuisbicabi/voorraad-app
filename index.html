@@ -583,9 +583,9 @@ function getSettings() {
 }
 
 // Load data from Google Sheets
-async function loadData() {
+async function loadData(silent = false) {
   try {
-    document.getElementById('content').innerHTML = '<div class="loading"><div class="loading-spinner"></div>Laden...</div>';
+    if (!silent) document.getElementById('content').innerHTML = '<div class="loading"><div class="loading-spinner"></div>Laden...</div>';
     const resp = await fetch(SCRIPT_URL + '?action=read');
     const data = await resp.json();
     if (data.rows) {
@@ -594,7 +594,7 @@ async function loadData() {
       localStorage.setItem('voorraad_sync', new Date().toLocaleString('nl-NL'));
       document.getElementById('last-sync').textContent = 'Gesync: ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'});
       renderTab();
-      showToast('✓ Voorraad bijgewerkt');
+      if (!silent) showToast('✓ Voorraad bijgewerkt');
     }
   } catch(e) {
     const cached = localStorage.getItem('voorraad_cache');
@@ -603,9 +603,9 @@ async function loadData() {
       const syncTime = localStorage.getItem('voorraad_sync') || 'onbekend';
       document.getElementById('last-sync').textContent = '📴 Offline — ' + syncTime;
       renderTab();
-      showToast('Offline modus — gecachede data');
+      if (!silent) showToast('Offline modus — gecachede data');
     } else {
-      document.getElementById('content').innerHTML = '<div class="empty">Geen data. Controleer je verbinding.</div>';
+      if (!silent) document.getElementById('content').innerHTML = '<div class="empty">Geen data. Controleer je verbinding.</div>';
     }
   }
 }
@@ -844,8 +844,11 @@ function saveModal() {
 }
 
 async function fetchGAS(payload) {
+  console.log('fetchGAS →', JSON.stringify(payload));
   const resp = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body: JSON.stringify(payload)});
-  const json = await resp.json().catch(() => ({}));
+  if (!resp.ok) throw new Error('Server fout ' + resp.status);
+  const json = await resp.json().catch(() => { throw new Error('Ongeldig serverantwoord — controleer GAS-autorisatie'); });
+  console.log('fetchGAS ←', JSON.stringify(json));
   if (json.error) throw new Error(json.error);
   return json;
 }
@@ -898,47 +901,57 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
 
     // gr/ml → Comment aanpassen; discrete eenheden (zakken, potten, etc.) → Aantal aanpassen
     const gebruiktComment = !eenheid || eenheid === 'gr' || eenheid === 'ml';
+    console.log('gebruiktComment:', gebruiktComment, '| bron.Comment:', bron.Comment, '| bron.Aantal:', bron.Aantal);
 
     if (gebruiktComment) {
-      // --- Comment-modus: hoeveelheid in gr of ml ---
-      const bronParsed = parseHoeveelheid(bron.Comment);
+      // --- Comment-modus: Comment = gewicht per pakket, Aantal = aantal pakketten ---
+      const bronParsed = parseHoeveelheid(String(bron.Comment || ''));
       const commentEenheid = bronParsed ? bronParsed.eenheid : (eenheid || 'gr');
-      const bronWaarde = bronParsed ? bronParsed.waarde : 0;
-      const nieuweBronWaarde = Math.max(0, bronWaarde - hoeveelheid);
-      const nieuweBronComment = maakNieuweComment(bron.Comment, nieuweBronWaarde, commentEenheid);
+      const perPakket = bronParsed ? bronParsed.waarde : hoeveelheid;
+      const bronAantal = Number(bron.Aantal) || 1;
+      const totaalBron = perPakket * bronAantal;
+      const nieuwTotaal = Math.max(0, totaalBron - hoeveelheid);
+      const nieuwAantalBron = perPakket > 0 ? Math.round(nieuwTotaal / perPakket) : 0;
+      const pakketsMoved = bronAantal - nieuwAantalBron;
+      console.log('perPakket:', perPakket, '| bronAantal:', bronAantal, '| nieuwAantalBron:', nieuwAantalBron, '| pakketsMoved:', pakketsMoved);
 
-      // Bron bijwerken of verwijderen
+      // Bron bijwerken of verwijderen (Comment ongewijzigd — gewicht per pakket blijft)
       const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
-      if (nieuweBronWaarde === 0) {
+      console.log('fetchGAS bron start — actie:', nieuwAantalBron === 0 ? 'delete' : 'update', '| Productnaam:', bron.Productnaam, '| Opslagplaats:', bron.Opslagplaats);
+      if (nieuwAantalBron === 0) {
         await fetchGAS({action:'delete', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats});
         if (bronIdx >= 0) allData.splice(bronIdx, 1);
       } else {
-        await fetchGAS({action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats, Aantal: bron.Aantal, Comment: nieuweBronComment});
-        if (bronIdx >= 0) allData[bronIdx].Comment = nieuweBronComment;
+        await fetchGAS({action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats, Aantal: nieuwAantalBron});
+        if (bronIdx >= 0) allData[bronIdx].Aantal = nieuwAantalBron;
       }
+      console.log('fetchGAS bron done');
 
-      // Doel bijwerken of aanmaken
+      // Doel bijwerken of aanmaken (Comment ongewijzigd — eigen gewicht per pakket blijft)
       const doel = allData.find(r =>
         r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
         r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
       );
+      console.log('doel gevonden:', doel ? doel.Productnaam + ' @ ' + doel.Opslagplaats : 'NIEUW (add)');
       if (doel) {
-        const doelParsed = parseHoeveelheid(doel.Comment);
-        const doelHuidig = doelLeeg ? 0 : (doelParsed ? doelParsed.waarde : 0);
-        const nieuweDoelComment = maakNieuweComment(doel.Comment, doelHuidig + hoeveelheid, commentEenheid);
-        await fetchGAS({action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: doel.Aantal, Comment: nieuweDoelComment});
+        const nieuwAantalDoel = (doelLeeg ? 0 : (Number(doel.Aantal) || 0)) + pakketsMoved;
+        console.log('fetchGAS doel update start — Aantal:', nieuwAantalDoel);
+        await fetchGAS({action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: nieuwAantalDoel});
         const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
-        if (doelIdx >= 0) allData[doelIdx].Comment = nieuweDoelComment;
+        if (doelIdx >= 0) allData[doelIdx].Aantal = nieuwAantalDoel;
       } else {
-        const nieuweRij = {Productnaam: bron.Productnaam, Opslagplaats: naarLocatie, 'Categorieën': bron['Categorieën'], Aantal: bron.Aantal, Comment: Math.round(hoeveelheid) + ' ' + commentEenheid, Vervaldatum: bron.Vervaldatum || ''};
+        const nieuweRij = {Productnaam: bron.Productnaam, Opslagplaats: naarLocatie, 'Categorieën': bron['Categorieën'], Aantal: pakketsMoved, Comment: bron.Comment, Vervaldatum: bron.Vervaldatum || ''};
+        console.log('fetchGAS doel add start — nieuweRij:', JSON.stringify(nieuweRij));
         await fetchGAS({action:'add', ...nieuweRij});
         allData.push(nieuweRij);
       }
-      showToast('✓ ' + Math.round(hoeveelheid) + ' ' + commentEenheid + ' verplaatst naar ' + naarLocatie);
+      console.log('fetchGAS doel done');
+      showToast('✓ ' + pakketsMoved + ' × ' + Math.round(perPakket) + ' ' + commentEenheid + ' verplaatst naar ' + naarLocatie);
 
     } else {
       // --- Aantal-modus: discrete eenheden (zakken, potten, blikken, stuks) ---
-      const nieuwAantalBron = Math.max(0, bron.Aantal - hoeveelheid);
+      const bronAantal = Number(bron.Aantal) || 0;
+      const nieuwAantalBron = Math.max(0, bronAantal - hoeveelheid);
 
       // Bron bijwerken of verwijderen
       const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
@@ -956,7 +969,7 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
         r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
       );
       if (doel) {
-        const nieuwAantalDoel = (doelLeeg ? 0 : doel.Aantal) + hoeveelheid;
+        const nieuwAantalDoel = (doelLeeg ? 0 : (Number(doel.Aantal) || 0)) + hoeveelheid;
         await fetchGAS({action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: nieuwAantalDoel, Comment: doel.Comment});
         const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
         if (doelIdx >= 0) allData[doelIdx].Aantal = nieuwAantalDoel;
@@ -968,12 +981,10 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
       showToast('✓ ' + hoeveelheid + ' ' + eenheid + ' verplaatst naar ' + naarLocatie);
     }
 
-    localStorage.setItem('voorraad_cache', JSON.stringify(allData));
-    renderTab();
-    await loadData();
+    await loadData(true);
   } catch(e) {
+    console.error('FOUT IN verplaatsHoeveelheid:', e);
     showToast('Fout bij verplaatsen: ' + e.message);
-    console.error(e);
   }
 }
 
@@ -1113,6 +1124,15 @@ async function processVoice(transcript) {
     return;
   }
 
+  // "Ververs" triggert een volledige sync met de sheet
+  if (transcript.trim().toLowerCase() === 'ververs') {
+    document.getElementById('mic-status').textContent = '↻ Synchroniseren...';
+    await loadData();
+    document.getElementById('mic-status').textContent = '✓ Voorraad bijgewerkt';
+    setTimeout(() => startMic(), 1500);
+    return;
+  }
+
   document.getElementById('mic-status').textContent = '⏳ Verwerken...';
 
   gesprekHistory.push({role: 'user', content: transcript});
@@ -1138,7 +1158,7 @@ async function processVoice(transcript) {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 1000,
         messages: [
           ...gesprekHistory.slice(0, -1).map(function(m) {
@@ -1281,6 +1301,16 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
           if (product) await updateProduct(product, {Opslagplaats_nieuw: result.locatie_nieuw});
         }
       }
+    }
+
+    // Fix 1+2: UI en statusbericht bijwerken vanuit de bijgewerkte lokale staat
+    if (result.uitvoeren && result.product && !['zoek','info'].includes(result.actie)) {
+      const bijgewerkt = allData.filter(r => r.Productnaam.toLowerCase().includes(result.product.toLowerCase()));
+      if (bijgewerkt.length > 0) {
+        const details = bijgewerkt.map(r => r.Opslagplaats + ': ' + r.Aantal + (r.Comment ? ' (' + r.Comment + ')' : '')).join(' | ');
+        statusEl.textContent = result.antwoord + ' — ' + details;
+      }
+      renderTab();
     }
 
     if (result.product) {
