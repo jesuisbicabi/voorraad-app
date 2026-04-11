@@ -49,6 +49,10 @@ GAS backend: `apps-script.gs` (Google Apps Script, apart gedeployd)
    - UI: badge toont totaalgrammen; meta toont `X st × Y gr`. Modal Aantal heeft `step="any"`.
    - AI-prompt en voice context bijgewerkt om GrPerStuk te gebruiken.
 
+## Bekende gedrag
+
+- Lokale info-vraag vult automatisch de zoekbalk met de productnaam zodat de lijst meefilter. Zoekbalk blijft gevuld totdat de gebruiker 'stop' zegt of handmatig wist.
+
 ## Openstaande punten
 
 1. **Lokale info-weergave toont niet correct GrPerStuk** — Opgelost 2026-04-11.

@@ -1168,6 +1168,9 @@ async function processVoice(transcript) {
       gesprekHistory.push({role: 'user', content: transcript});
       gesprekHistory.push({role: 'assistant', content: antwoord});
       if (gesprekHistory.length > 8) gesprekHistory = gesprekHistory.slice(-8);
+      const zoekterm = gevondenLokaal[0].Productnaam;
+      document.getElementById('search').value = zoekterm;
+      onSearch(zoekterm);
       const statusElLokaal = document.getElementById('mic-status');
       statusElLokaal.textContent = antwoord;
       statusElLokaal.classList.add('response');
