@@ -1156,7 +1156,7 @@ async function processVoice(transcript) {
       return infoWoorden.some(w => tekst.includes(w));
     });
     if (gevondenLokaal.length > 0) {
-      const antwoord = gevondenLokaal.slice(0, 3).map(r => {
+      const antwoord = gevondenLokaal.map(r => {
         const grPS = parseFloat(r.GrPerStuk) || 0;
         const aantalNum = parseFloat(r.Aantal) || 0;
         const hoeveelheid = grPS > 0
@@ -1168,7 +1168,9 @@ async function processVoice(transcript) {
       gesprekHistory.push({role: 'user', content: transcript});
       gesprekHistory.push({role: 'assistant', content: antwoord});
       if (gesprekHistory.length > 8) gesprekHistory = gesprekHistory.slice(-8);
-      const zoekterm = gevondenLokaal[0].Productnaam;
+      const zoekterm = infoWoorden.find(w =>
+        allData.some(r => (r.Productnaam + ' ' + r['Categorieën']).toLowerCase().includes(w))
+      ) || transcript;
       document.getElementById('search').value = zoekterm;
       onSearch(zoekterm);
       const statusElLokaal = document.getElementById('mic-status');
