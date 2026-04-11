@@ -682,7 +682,7 @@ function renderGroepen(rows, el, key) {
         <span class="group-item-right">
           ${exp}
           <span class="group-item-loc">${key === 'Opslagplaats' ? r['Categorieën'] : r.Opslagplaats}</span>
-          <span class="group-item-qty">${r.Aantal}</span>
+          <span class="group-item-qty">${parseFloat(r.GrPerStuk) > 0 ? Math.round(r.GrPerStuk * r.Aantal) + ' gr' : r.Aantal}</span>
         </span>
       </div>`;
     });
@@ -750,6 +750,13 @@ function saveSettings() {
 function productItemHTML(r) {
   const cls = isExpired(r.Vervaldatum) ? 'expired' : isExpiringSoon(r.Vervaldatum) ? 'expiring-soon' : '';
   const emoji = categoryEmoji(r['Categorieën']);
+  const grPerStuk = parseFloat(r.GrPerStuk) || 0;
+  const aantal = parseFloat(r.Aantal) || 0;
+  const totaalGr = grPerStuk > 0 ? Math.round(grPerStuk * aantal) : 0;
+  const qtyLabel = grPerStuk > 0 ? totaalGr + ' gr' : (r.Aantal || 1);
+  const metaHoeveelheid = grPerStuk > 0
+    ? `<span style="color:var(--text2)">${aantal % 1 !== 0 ? aantal.toFixed(2) : aantal} st × ${grPerStuk} gr</span>`
+    : r.Comment ? `<span style="color:var(--text2)">${String(r.Comment).substring(0,30)}${String(r.Comment).length>30?'…':''}</span>` : '';
   return `<div class="product-item ${cls}" onclick='openModal(${JSON.stringify(r)})'>
     <div class="product-photo">${r.Foto ? `<img src="${r.Foto}" style="width:100%;height:100%;border-radius:8px;object-fit:cover">` : emoji}</div>
     <div class="product-info">
@@ -757,10 +764,10 @@ function productItemHTML(r) {
       <div class="product-meta">
         <span>📍 ${r.Opslagplaats || '—'}</span>
         ${r.Vervaldatum ? `<span>📅 ${formatDate(r.Vervaldatum)}</span>` : ''}
-        ${r.Comment ? `<span style="color:var(--text2)">${String(r.Comment).substring(0,30)}${String(r.Comment).length>30?'…':''}</span>` : ''}
+        ${metaHoeveelheid}
       </div>
     </div>
-    <div class="product-qty">${r.Aantal || 1}</div>
+    <div class="product-qty">${qtyLabel}</div>
   </div>`;
 }
 
@@ -795,7 +802,7 @@ function openModal(r) {
     </div>
     <div class="modal-field">
       <span class="modal-field-label">Aantal</span>
-      <input class="modal-field-input" id="edit-aantal" type="number" min="0" step="1" value="${r.Aantal ?? 1}">
+      <input class="modal-field-input" id="edit-aantal" type="number" min="0" step="any" value="${r.Aantal ?? 1}">
     </div>
     <div class="modal-field">
       <span class="modal-field-label">Vervaldatum</span>
@@ -904,49 +911,46 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
     console.log('gebruiktComment:', gebruiktComment, '| bron.Comment:', bron.Comment, '| bron.Aantal:', bron.Aantal);
 
     if (gebruiktComment) {
-      // --- Comment-modus: Comment = gewicht per pakket, Aantal = aantal pakketten ---
-      const bronParsed = parseHoeveelheid(String(bron.Comment || ''));
-      const commentEenheid = bronParsed ? bronParsed.eenheid : (eenheid || 'gr');
-      const perPakket = bronParsed ? bronParsed.waarde : hoeveelheid;
-      const bronAantal = Number(bron.Aantal) || 1;
-      const totaalBron = perPakket * bronAantal;
-      const nieuwTotaal = Math.max(0, totaalBron - hoeveelheid);
-      const nieuwAantalBron = perPakket > 0 ? Math.round(nieuwTotaal / perPakket) : 0;
-      const pakketsMoved = bronAantal - nieuwAantalBron;
-      console.log('perPakket:', perPakket, '| bronAantal:', bronAantal, '| nieuwAantalBron:', nieuwAantalBron, '| pakketsMoved:', pakketsMoved);
+      // --- Gram-modus: rekent via GrPerStuk ---
+      const grPerStuk = parseFloat(bron.GrPerStuk) || 0;
+      const bronAantal = parseFloat(bron.Aantal) || 0;
+      const totaalBronGr = grPerStuk > 0 ? grPerStuk * bronAantal : 0;
+      const nieuwBronGr = Math.max(0, totaalBronGr - hoeveelheid);
+      const bronAantalNieuw = grPerStuk > 0 ? parseFloat((nieuwBronGr / grPerStuk).toFixed(4)) : bronAantal;
+      console.log('grPerStuk:', grPerStuk, '| totaalBronGr:', totaalBronGr, '| nieuwBronGr:', nieuwBronGr, '| bronAantalNieuw:', bronAantalNieuw);
 
-      // Bron bijwerken of verwijderen (Comment ongewijzigd — gewicht per pakket blijft)
+      if (grPerStuk <= 0) { showToast('GrPerStuk niet ingevuld voor dit product'); return; }
+
+      // Bron bijwerken of verwijderen
       const bronIdx = allData.findIndex(x => x.Productnaam === bron.Productnaam && x.Opslagplaats === bron.Opslagplaats);
-      console.log('fetchGAS bron start — actie:', nieuwAantalBron === 0 ? 'delete' : 'update', '| Productnaam:', bron.Productnaam, '| Opslagplaats:', bron.Opslagplaats);
-      if (nieuwAantalBron === 0) {
+      if (nieuwBronGr === 0) {
         await fetchGAS({action:'delete', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats});
         if (bronIdx >= 0) allData.splice(bronIdx, 1);
       } else {
-        await fetchGAS({action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats, Aantal: nieuwAantalBron});
-        if (bronIdx >= 0) allData[bronIdx].Aantal = nieuwAantalBron;
+        await fetchGAS({action:'update', Productnaam: bron.Productnaam, Opslagplaats: bron.Opslagplaats, Aantal: bronAantalNieuw});
+        if (bronIdx >= 0) allData[bronIdx].Aantal = bronAantalNieuw;
       }
-      console.log('fetchGAS bron done');
 
-      // Doel bijwerken of aanmaken (Comment ongewijzigd — eigen gewicht per pakket blijft)
+      // Doel bijwerken of aanmaken
       const doel = allData.find(r =>
         r.Productnaam.toLowerCase().includes(productnaam.toLowerCase()) &&
         r.Opslagplaats.toLowerCase().includes(naarLocatie.toLowerCase())
       );
-      console.log('doel gevonden:', doel ? doel.Productnaam + ' @ ' + doel.Opslagplaats : 'NIEUW (add)');
       if (doel) {
-        const nieuwAantalDoel = (doelLeeg ? 0 : (Number(doel.Aantal) || 0)) + pakketsMoved;
-        console.log('fetchGAS doel update start — Aantal:', nieuwAantalDoel);
-        await fetchGAS({action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: nieuwAantalDoel});
+        const doelGrPerStuk = parseFloat(doel.GrPerStuk) || grPerStuk;
+        const doelTotaalGr = doelGrPerStuk > 0 ? doelGrPerStuk * (parseFloat(doel.Aantal) || 0) : 0;
+        const nieuwDoelGr = (doelLeeg ? 0 : doelTotaalGr) + hoeveelheid;
+        const doelAantalNieuw = doelGrPerStuk > 0 ? parseFloat((nieuwDoelGr / doelGrPerStuk).toFixed(4)) : 0;
+        await fetchGAS({action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: doelAantalNieuw});
         const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
-        if (doelIdx >= 0) allData[doelIdx].Aantal = nieuwAantalDoel;
+        if (doelIdx >= 0) allData[doelIdx].Aantal = doelAantalNieuw;
       } else {
-        const nieuweRij = {Productnaam: bron.Productnaam, Opslagplaats: naarLocatie, 'Categorieën': bron['Categorieën'], Aantal: pakketsMoved, Comment: bron.Comment, Vervaldatum: bron.Vervaldatum || ''};
-        console.log('fetchGAS doel add start — nieuweRij:', JSON.stringify(nieuweRij));
+        const nieuweAantal = parseFloat((hoeveelheid / grPerStuk).toFixed(4));
+        const nieuweRij = {Productnaam: bron.Productnaam, Opslagplaats: naarLocatie, 'Categorieën': bron['Categorieën'], Aantal: nieuweAantal, Comment: bron.Comment || '', GrPerStuk: bron.GrPerStuk || '', Vervaldatum: bron.Vervaldatum || ''};
         await fetchGAS({action:'add', ...nieuweRij});
         allData.push(nieuweRij);
       }
-      console.log('fetchGAS doel done');
-      showToast('✓ ' + pakketsMoved + ' × ' + Math.round(perPakket) + ' ' + commentEenheid + ' verplaatst naar ' + naarLocatie);
+      showToast('✓ ' + hoeveelheid + ' gr verplaatst naar ' + naarLocatie);
 
     } else {
       // --- Aantal-modus: discrete eenheden (zakken, potten, blikken, stuks) ---
@@ -1135,6 +1139,42 @@ async function processVoice(transcript) {
 
   document.getElementById('mic-status').textContent = '⏳ Verwerken...';
 
+  // Lokale afhandeling voor info-vragen — geen API-call nodig
+  const actieWoorden = ['verplaats', 'voeg toe', 'toevoegen', 'verwijder', 'verwijderen', 'is op', 'leeg', 'update', 'zet over', 'leg '];
+  const isActie = actieWoorden.some(w => transcript.toLowerCase().includes(w));
+  if (!isActie) {
+    const infoWoorden = transcript.toLowerCase().split(' ').filter(w => w.length > 2);
+    const gevondenLokaal = allData.filter(r => {
+      const tekst = (r.Productnaam + ' ' + r['Categorieën']).toLowerCase();
+      return infoWoorden.some(w => tekst.includes(w));
+    });
+    if (gevondenLokaal.length > 0) {
+      const antwoord = gevondenLokaal.slice(0, 3).map(r => {
+        const grPS = parseFloat(r.GrPerStuk) || 0;
+        const hoeveelheid = grPS > 0
+          ? Math.round(grPS * (parseFloat(r.Aantal) || 0)) + ' gr'
+          : (r.Aantal + (r.Comment ? ' (' + r.Comment + ')' : ''));
+        return r.Productnaam + ' — ' + r.Opslagplaats + ': ' + hoeveelheid;
+      }).join(' | ');
+      if (gevondenLokaal.length === 1) huidigProduct = gevondenLokaal[0].Productnaam;
+      gesprekHistory.push({role: 'user', content: transcript});
+      gesprekHistory.push({role: 'assistant', content: antwoord});
+      if (gesprekHistory.length > 8) gesprekHistory = gesprekHistory.slice(-8);
+      const statusElLokaal = document.getElementById('mic-status');
+      statusElLokaal.textContent = antwoord;
+      statusElLokaal.classList.add('response');
+      const leestijdLokaal = Math.max(4000, Math.min(antwoord.length * 50, 12000));
+      if (leestijdTimer) clearTimeout(leestijdTimer);
+      leestijdTimer = setTimeout(() => {
+        leestijdTimer = null;
+        statusElLokaal.classList.remove('response');
+        if (!isRecording) startMic();
+        else statusElLokaal.textContent = '🎤 Luisteren...';
+      }, leestijdLokaal);
+      return;
+    }
+  }
+
   gesprekHistory.push({role: 'user', content: transcript});
   if (gesprekHistory.length > 8) gesprekHistory = gesprekHistory.slice(-8);
 
@@ -1144,9 +1184,13 @@ async function processVoice(transcript) {
     return woorden.some(w => tekst.includes(w));
   });
   const contextData = gevonden.length > 0 ? gevonden : allData.slice(0, 100);
-  const context = contextData.map(r =>
-    `${r.Productnaam} | ${r.Opslagplaats} | ${r['Categorieën']} | aantal: ${r.Aantal} | hoeveelheid: ${r.Comment||'onbekend'} | vervalt: ${r.Vervaldatum||'onbekend'}`
-  ).join('\n');
+  const context = contextData.map(r => {
+    const grPS = parseFloat(r.GrPerStuk) || 0;
+    const hoeveelheidStr = grPS > 0
+      ? `${grPS} gr/stuk (${Math.round(grPS * (parseFloat(r.Aantal) || 0))} gr totaal)`
+      : (r.Comment || 'onbekend');
+    return `${r.Productnaam} | ${r.Opslagplaats} | ${r['Categorieën']} | aantal: ${r.Aantal} | hoeveelheid: ${hoeveelheidStr} | vervalt: ${r.Vervaldatum||'onbekend'}`;
+  }).join('\n');
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1174,7 +1218,7 @@ async function processVoice(transcript) {
 ${huidigProduct ? 'Huidig product in gesprek: ' + huidigProduct + '\n' : ''}
 Gebruiker zei: "${transcript}"
 
-Relevante producten (productnaam | locatie | categorie | aantal verpakkingen | hoeveelheid in comment | vervaldatum):
+Relevante producten (productnaam | locatie | categorie | aantal | hoeveelheid | vervaldatum):
 ${context}
 
 BELANGRIJK voor "is op" / "leeg":
@@ -1186,10 +1230,10 @@ BELANGRIJK voor verplaatsen:
 - "locatie" (bronlocatie): vul dit altijd in vanuit de productlijst als de gebruiker het niet noemt
 - "hoeveelheid" is het getal dat verplaatst wordt (bijv. 300 voor "300 gram", 2 voor "2 zakken")
 - "eenheid" is de eenheid van de hoeveelheid: "gr", "ml", "zak", "pot", "blik", "pak", "stuks", etc.
-- Als eenheid gr of ml is: wordt het Comment-veld aangepast (hoeveelheid in comment aftrekken/optellen)
-- Als eenheid iets anders is (zak, pot, blik, stuks, etc.): wordt het Aantal-veld aangepast
+- Als eenheid gr of ml is: wordt het Aantal (decimaal) herberekend via GrPerStuk (totaalGr / GrPerStuk)
+- Als eenheid iets anders is (zak, pot, blik, stuks, etc.): wordt het Aantal-veld direct aangepast
 - "doel_leeg" is true als de gebruiker aangeeft dat de doellocatie leeg/op is
-- Voorbeelden: "verplaats 300 gram" → hoeveelheid: 300, eenheid: "gr" (Comment)
+- Voorbeelden: "verplaats 300 gram" → hoeveelheid: 300, eenheid: "gr" (Aantal decimaal via GrPerStuk)
                "verplaats 1 zak" → hoeveelheid: 1, eenheid: "zak" (Aantal)
                "verplaats 2 potten" → hoeveelheid: 2, eenheid: "pot" (Aantal)
 
@@ -1268,7 +1312,6 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
         if (product) {
           const changes = {};
           if (result.aantal !== null) changes.Aantal = result.aantal;
-          if (result.aantal === 0) changes.Comment = '0 gr';
           if (result.locatie_nieuw) changes.Opslagplaats_nieuw = result.locatie_nieuw;
           if (result.vervaldatum) changes.Vervaldatum = result.vervaldatum;
           await updateProduct(product, changes);

@@ -56,6 +56,7 @@ function updateRow(sheet, data) {
       if (data.Opslagplaats_nieuw !== undefined) sheet.getRange(i+1, 1).setValue(data.Opslagplaats_nieuw);
       if (data.Vervaldatum !== undefined) sheet.getRange(i+1, 4).setValue(data.Vervaldatum);
       if (data.Comment !== undefined) sheet.getRange(i+1, 6).setValue(data.Comment);
+      if (data.GrPerStuk !== undefined) sheet.getRange(i+1, 7).setValue(data.GrPerStuk);
       return {success: true};
     }
   }
@@ -69,7 +70,8 @@ function addRow(sheet, data) {
     data.Productnaam || '',
     data.Vervaldatum || '',
     data.Aantal || 1,
-    data.Comment || ''
+    data.Comment || '',
+    data.GrPerStuk || ''
   ]);
   return {success: true};
 }
