@@ -923,7 +923,7 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
       const bronAantal = parseFloat(bron.Aantal) || 0;
       const totaalBronGr = grPerStuk > 0 ? grPerStuk * bronAantal : 0;
       const nieuwBronGr = Math.max(0, totaalBronGr - hoeveelheid);
-      const bronAantalNieuw = grPerStuk > 0 ? parseFloat((nieuwBronGr / grPerStuk).toFixed(4)) : bronAantal;
+      const bronAantalNieuw = grPerStuk > 0 ? Math.round(nieuwBronGr / grPerStuk) : bronAantal;
       console.log('grPerStuk:', grPerStuk, '| totaalBronGr:', totaalBronGr, '| nieuwBronGr:', nieuwBronGr, '| bronAantalNieuw:', bronAantalNieuw);
 
       if (grPerStuk <= 0) { showToast('GrPerStuk niet ingevuld voor dit product'); return; }
@@ -947,12 +947,12 @@ async function verplaatsHoeveelheid(productnaam, vanLocatie, naarLocatie, hoevee
         const doelGrPerStuk = parseFloat(doel.GrPerStuk) || grPerStuk;
         const doelTotaalGr = doelGrPerStuk > 0 ? doelGrPerStuk * (parseFloat(doel.Aantal) || 0) : 0;
         const nieuwDoelGr = (doelLeeg ? 0 : doelTotaalGr) + hoeveelheid;
-        const doelAantalNieuw = doelGrPerStuk > 0 ? parseFloat((nieuwDoelGr / doelGrPerStuk).toFixed(4)) : 0;
+        const doelAantalNieuw = doelGrPerStuk > 0 ? Math.round(nieuwDoelGr / doelGrPerStuk) : 0;
         await fetchGAS({action:'update', Productnaam: doel.Productnaam, Opslagplaats: doel.Opslagplaats, Aantal: doelAantalNieuw});
         const doelIdx = allData.findIndex(x => x.Productnaam === doel.Productnaam && x.Opslagplaats === doel.Opslagplaats);
         if (doelIdx >= 0) allData[doelIdx].Aantal = doelAantalNieuw;
       } else {
-        const nieuweAantal = parseFloat((hoeveelheid / grPerStuk).toFixed(4));
+        const nieuweAantal = Math.round(hoeveelheid / grPerStuk);
         const nieuweRij = {Productnaam: bron.Productnaam, Opslagplaats: naarLocatie, 'Categorieën': bron['Categorieën'], Aantal: nieuweAantal, Comment: bron.Comment || '', GrPerStuk: bron.GrPerStuk || '', Vervaldatum: bron.Vervaldatum || ''};
         await fetchGAS({action:'add', ...nieuweRij});
         allData.push(nieuweRij);
@@ -1168,9 +1168,10 @@ async function processVoice(transcript) {
       gesprekHistory.push({role: 'user', content: transcript});
       gesprekHistory.push({role: 'assistant', content: antwoord});
       if (gesprekHistory.length > 8) gesprekHistory = gesprekHistory.slice(-8);
-      const zoekterm = infoWoorden.find(w =>
-        allData.some(r => (r.Productnaam + ' ' + r['Categorieën']).toLowerCase().includes(w))
-      ) || transcript;
+      const zoekterm = infoWoorden
+        .map(w => ({ w, n: allData.filter(r => (r.Productnaam + ' ' + r['Categorieën']).toLowerCase().includes(w)).length }))
+        .filter(x => x.n > 0)
+        .sort((a, b) => b.n - a.n)[0]?.w || transcript.toLowerCase();
       document.getElementById('search').value = zoekterm;
       onSearch(zoekterm);
       const statusElLokaal = document.getElementById('mic-status');
