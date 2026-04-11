@@ -805,6 +805,10 @@ function openModal(r) {
       <input class="modal-field-input" id="edit-aantal" type="number" min="0" step="any" value="${r.Aantal ?? 1}">
     </div>
     <div class="modal-field">
+      <span class="modal-field-label">Gr per stuk</span>
+      <input class="modal-field-input" id="edit-grperstuk" type="number" min="0" step="any" value="${r.GrPerStuk || ''}" placeholder="—">
+    </div>
+    <div class="modal-field">
       <span class="modal-field-label">Vervaldatum</span>
       <input class="modal-field-input" id="edit-vervaldatum" type="date" value="${dateVal}" style="min-width:130px">
     </div>
@@ -831,12 +835,15 @@ function saveModal() {
   if (!r) return;
   const locatie = document.getElementById('edit-locatie').value.trim();
   const aantal = parseFloat(document.getElementById('edit-aantal').value);
+  const grPerStukVal = document.getElementById('edit-grperstuk').value.trim();
   const dateISO = document.getElementById('edit-vervaldatum').value; // yyyy-mm-dd
   const notitie = document.getElementById('edit-notitie').value.trim();
 
   const changes = {};
   if (locatie !== (r.Opslagplaats || '')) changes.Opslagplaats_nieuw = locatie;
   if (!isNaN(aantal) && aantal !== r.Aantal) changes.Aantal = aantal;
+  const grPerStukNum = grPerStukVal !== '' ? parseFloat(grPerStukVal) : null;
+  if (grPerStukNum !== null && !isNaN(grPerStukNum) && grPerStukNum !== parseFloat(r.GrPerStuk || 0)) changes.GrPerStuk = grPerStukNum;
   if (dateISO) {
     const [y, m, d] = dateISO.split('-');
     const formatted = `${+d}-${+m}-${y}`;
@@ -1151,8 +1158,9 @@ async function processVoice(transcript) {
     if (gevondenLokaal.length > 0) {
       const antwoord = gevondenLokaal.slice(0, 3).map(r => {
         const grPS = parseFloat(r.GrPerStuk) || 0;
+        const aantalNum = parseFloat(r.Aantal) || 0;
         const hoeveelheid = grPS > 0
-          ? Math.round(grPS * (parseFloat(r.Aantal) || 0)) + ' gr'
+          ? `${aantalNum % 1 !== 0 ? aantalNum.toFixed(2) : aantalNum} st × ${grPS} gr = ${Math.round(grPS * aantalNum)} gr`
           : (r.Aantal + (r.Comment ? ' (' + r.Comment + ')' : ''));
         return r.Productnaam + ' — ' + r.Opslagplaats + ': ' + hoeveelheid;
       }).join(' | ');

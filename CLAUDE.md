@@ -51,13 +51,13 @@ GAS backend: `apps-script.gs` (Google Apps Script, apart gedeployd)
 
 ## Openstaande punten
 
-1. **Lokale info-weergave toont niet correct GrPerStuk** — OPEN
-   - Huidig: toont bijv. `8` of `8 (notitie)`
-   - Gewenst: `8 zakjes × 15 gr = 120 gr`
+1. **Lokale info-weergave toont niet correct GrPerStuk** — Opgelost 2026-04-11.
+   - Huidig: toont bijv. `8 st × 15 gr = 120 gr`
+   - Format: `{aantal} st × {GrPerStuk} gr = {totaalGr} gr`
 
-2. **Handmatig aanpassen van velden verdwenen** — OPEN
-   - Aantal, locatie en andere velden zijn niet meer bewerkbaar via de UI
-   - Moet worden teruggezet
+2. **Handmatig aanpassen van velden verdwenen** — Opgelost (modal heeft bewerkbare inputs).
+   - Locatie, Aantal, Gr per stuk, Vervaldatum en Notitie zijn bewerkbaar via het detailscherm.
+   - GrPerStuk-veld toegevoegd aan het edit-modal op 2026-04-11.
 
 ## Werkinstructie
 Na elke bugfix of nieuwe feature dit CLAUDE.md bestand updaten met wat er gewijzigd is en waarom.
