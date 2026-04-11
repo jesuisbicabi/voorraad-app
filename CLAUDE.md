@@ -38,30 +38,37 @@ GAS backend: `apps-script.gs` (Google Apps Script, apart gedeployd)
 5. **Aantal-berekening in Comment-modus klopte niet** — Comment werd als totaalgewicht behandeld i.p.v. gewicht-per-pakket. Bij 2× 250gr werd de bron na verplaatsen van 250gr op 0 gezet i.p.v. 1. Opgelost door totaal te berekenen als `perPakket × bronAantal`, nieuw aantal af te leiden via `Math.round(nieuwTotaal / perPakket)`, en alleen Aantal (niet Comment) bij te werken voor bron en doel. `pakketsMoved = bronAantal - nieuwAantalBron` bepaalt hoeveel pakketten naar het doel gaan.
 6. **App toonde oude data na verplaatsing** — Handmatige `allData`-updates in `verplaatsHoeveelheid` weken af van wat GAS daadwerkelijk had weggeschreven. Opgelost door na alle succesvolle GAS-calls `await loadData(true)` aan te roepen. De `silent`-parameter (toegevoegd aan `loadData`) slaat de laadspinner en "Voorraad bijgewerkt"-toast over, zodat alleen de verplaatsingssuccesmelding zichtbaar is.
 
-8. **Info-vragen lokaal afgehandeld** — Opgelost 2026-04-11.
-   - Queries zonder actiewoorden (verplaats, toevoegen, verwijderen, etc.) worden lokaal beantwoord vanuit `allData`, geen API-call.
-   - Als er geen match gevonden wordt, valt het alsnog door naar de API.
-
 7. **Kolom G (GrPerStuk) toegevoegd** — Opgelost 2026-04-10.
    - GrPerStuk (numeriek, bijv. 250) is de enige bron voor gram-berekeningen. Geen Comment-parsing meer.
-   - Gram-modus: `totaalGr = GrPerStuk × Aantal`; na verplaatsen: `nieuwAantal = nieuwGr / GrPerStuk` (decimaal).
+   - Gram-modus: `totaalGr = GrPerStuk × Aantal`; na verplaatsen: `nieuwAantal = Math.round(nieuwGr / GrPerStuk)`.
    - GAS: `updateRow` schrijft kolom 7; `addRow` bevat kolom G.
    - UI: badge toont totaalgrammen; meta toont `X st × Y gr`. Modal Aantal heeft `step="any"`.
    - AI-prompt en voice context bijgewerkt om GrPerStuk te gebruiken.
 
-## Bekende gedrag
+8. **Info-vragen lokaal afgehandeld** — Opgelost 2026-04-11.
+   - Queries zonder actiewoorden (verplaats, toevoegen, verwijderen, etc.) worden lokaal beantwoord vanuit `allData`, geen API-call.
+   - Als er geen match gevonden wordt, valt het alsnog door naar de API.
 
-- Lokale info-vraag vult automatisch de zoekbalk met de productnaam zodat de lijst meefilter. Zoekbalk blijft gevuld totdat de gebruiker 'stop' zegt of handmatig wist.
+9. **Lokale info-weergave format + GrPerStuk in modal** — Opgelost 2026-04-11.
+   - Info-tekst toont nu `8 st × 15 gr = 120 gr` i.p.v. alleen `120 gr`.
+   - GrPerStuk-veld toegevoegd aan het edit-modal (naast Locatie, Aantal, Vervaldatum, Notitie).
+
+10. **Zoekbalk vult na lokale info-vraag** — Opgelost 2026-04-11.
+    - Na een spraakquery wordt de zoekbalk gevuld met het gesproken woord met de meeste productmatches.
+    - Zoekbalk blijft gevuld; gebruiker ziet direct alle bijbehorende locaties in de lijst.
+    - Zoekbalk wist via 'stop'-commando of handmatig.
+
+11. **Decimale aantallen na verplaatsen** — Opgelost 2026-04-11.
+    - Badge toonde bijv. `3.25` na verplaatsen in gram-modus.
+    - Alle `parseFloat((x / GrPerStuk).toFixed(4))` vervangen door `Math.round(x / GrPerStuk)`.
+
+12. **Zoekterm koos verkeerd woord bij meerdere infoWoorden** — Opgelost 2026-04-11.
+    - `infoWoorden.find(...)` pakte het eerste woord met enige match (bijv. "alle"), niet "linzen".
+    - Nu: het woord met de meeste matches in productnaam + categorie wint.
 
 ## Openstaande punten
 
-1. **Lokale info-weergave toont niet correct GrPerStuk** — Opgelost 2026-04-11.
-   - Huidig: toont bijv. `8 st × 15 gr = 120 gr`
-   - Format: `{aantal} st × {GrPerStuk} gr = {totaalGr} gr`
-
-2. **Handmatig aanpassen van velden verdwenen** — Opgelost (modal heeft bewerkbare inputs).
-   - Locatie, Aantal, Gr per stuk, Vervaldatum en Notitie zijn bewerkbaar via het detailscherm.
-   - GrPerStuk-veld toegevoegd aan het edit-modal op 2026-04-11.
+Geen bekende open punten.
 
 ## Werkinstructie
 Na elke bugfix of nieuwe feature dit CLAUDE.md bestand updaten met wat er gewijzigd is en waarom.
