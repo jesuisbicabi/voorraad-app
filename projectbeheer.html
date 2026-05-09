@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projectbeheer</title>
+<style>
+:root {
+  --bg:#f0f2f5;--sidebar:#1e2a38;--sidebar-hover:#2d3f52;--sidebar-active:#2980b9;
+  --card:#fff;--text:#2c3e50;--muted:#7f8c8d;--border:#e0e4e8;
+  --shadow:0 2px 8px rgba(0,0,0,.08);--shadow-lg:0 6px 20px rgba(0,0,0,.13);
+  --radius:10px;--accent:#3498db;--green:#27ae60;--orange:#e67e22;--red:#e74c3c;--grey:#95a5a6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;overflow:hidden;}
+
+/* SIDEBAR */
+.sidebar{width:240px;min-width:240px;background:var(--sidebar);display:flex;flex-direction:column;color:#ecf0f1;overflow:hidden;}
+.sb-head{padding:18px 16px 12px;border-bottom:1px solid rgba(255,255,255,.08);}
+.sb-head h1{font-size:15px;font-weight:700;color:#fff;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+.sb-head-btns{display:flex;gap:6px;}
+.sb-btn{background:rgba(255,255,255,.1);border:none;color:#ecf0f1;border-radius:6px;padding:5px 9px;font-size:11px;cursor:pointer;transition:background .15s;font-family:inherit;}
+.sb-btn:hover{background:rgba(255,255,255,.2);}
+.sb-nav{flex:1;overflow-y:auto;padding:6px 0;}
+.cat-wrap{margin-bottom:1px;}
+.cat-row{display:flex;align-items:center;padding:7px 10px 7px 14px;cursor:pointer;transition:background .15s;gap:6px;user-select:none;}
+.cat-row:hover{background:var(--sidebar-hover);}
+.cat-arrow{font-size:9px;color:rgba(255,255,255,.45);width:12px;flex-shrink:0;transition:transform .2s;display:inline-block;}
+.cat-arrow.open{transform:rotate(90deg);}
+.cat-name{flex:1;font-size:12px;font-weight:700;color:rgba(255,255,255,.75);letter-spacing:.3px;text-transform:uppercase;}
+.cat-acts{display:none;gap:3px;}
+.cat-row:hover .cat-acts{display:flex;}
+.ic-btn{background:none;border:none;color:rgba(255,255,255,.4);cursor:pointer;padding:2px 4px;border-radius:3px;font-size:12px;line-height:1;transition:all .15s;}
+.ic-btn:hover{color:#fff;background:rgba(255,255,255,.12);}
+.proj-list{padding-left:24px;display:none;}
+.proj-list.open{display:block;}
+.proj-row{display:flex;align-items:center;padding:5px 10px 5px 6px;cursor:pointer;border-radius:5px;gap:6px;margin:1px 4px;}
+.proj-row:hover{background:var(--sidebar-hover);}
+.proj-row.active{background:var(--sidebar-active);}
+.proj-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.25);flex-shrink:0;}
+.proj-row.active .proj-dot{background:#fff;}
+.proj-name{flex:1;font-size:12px;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.proj-row.active .proj-name{color:#fff;font-weight:500;}
+.proj-acts{display:none;gap:2px;}
+.proj-row:hover .proj-acts,.proj-row.active .proj-acts{display:flex;}
+.add-proj{display:flex;align-items:center;gap:5px;padding:5px 6px;color:rgba(255,255,255,.35);cursor:pointer;font-size:11px;border-radius:4px;transition:color .15s;margin:2px 4px;}
+.add-proj:hover{color:rgba(255,255,255,.75);}
+.sb-foot{padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);display:flex;flex-direction:column;gap:6px;}
+.dl-nav{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;border-radius:6px;color:rgba(255,255,255,.65);font-size:12px;transition:background .15s;}
+.dl-nav:hover,.dl-nav.active{background:var(--sidebar-hover);color:#fff;}
+.sb-add-cat{background:rgba(255,255,255,.07);border:none;color:rgba(255,255,255,.6);cursor:pointer;padding:7px 10px;border-radius:6px;font-size:12px;width:100%;text-align:left;transition:background .15s;font-family:inherit;}
+.sb-add-cat:hover{background:rgba(255,255,255,.14);}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.main-header{background:var(--card);border-bottom:1px solid var(--border);padding:16px 24px;display:flex;align-items:flex-start;gap:16px;flex-shrink:0;}
+.mh-info{flex:1;min-width:0;}
+.mh-title{font-size:19px;font-weight:700;}
+.mh-sub{font-size:12px;color:var(--muted);margin-top:3px;}
+.mh-cat{font-size:11px;color:#bbb;margin-top:2px;}
+.mh-acts{display:flex;gap:8px;flex-shrink:0;align-items:center;}
+.btn{padding:7px 14px;border-radius:7px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s;font-family:inherit;}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:#2471a3;}
+.btn-secondary{background:#f0f2f5;color:var(--text);border:1px solid var(--border);}
+.btn-secondary:hover{background:#e4e8ed;}
+.btn-danger{background:#fdeaea;color:var(--red);border:1px solid #f5c6c6;}
+.btn-danger:hover{background:#f5b7b1;}
+
+/* PINNED NOTE — collapsible (#1) */
+.pinned-bar{background:#fffdf0;border-bottom:1px solid #f0e8a0;display:flex;align-items:center;gap:8px;padding:8px 20px;cursor:pointer;flex-shrink:0;transition:background .15s;}
+.pinned-bar:hover{background:#fffbe0;}
+.pinned-preview{flex:1;font-size:12px;color:#8a7000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pinned-arrow{font-size:10px;color:#b8a030;transition:transform .2s;flex-shrink:0;}
+.pinned-arrow.open{transform:rotate(90deg);}
+.pinned-full{background:#fffdf0;border-bottom:1px solid #f0e8a0;padding:10px 20px;flex-shrink:0;display:flex;align-items:flex-start;gap:8px;}
+.pinned-text{flex:1;font-size:13px;color:#7a6500;white-space:pre-wrap;line-height:1.5;}
+.pinned-edit{background:none;border:none;color:#c8b050;cursor:pointer;font-size:13px;padding:2px 4px;border-radius:3px;flex-shrink:0;}
+.pinned-edit:hover{background:#f0e8a0;}
+
+/* TIMELINE */
+.tl-area{flex:1;overflow-x:auto;overflow-y:auto;padding:24px;}
+.tl{display:flex;align-items:flex-start;min-height:300px;}
+.tl-empty{display:flex;align-items:center;justify-content:center;height:260px;color:var(--muted);font-size:14px;flex:1;}
+.conn{display:flex;align-items:center;padding-top:40px;flex-shrink:0;}
+.arrow{width:36px;height:20px;position:relative;flex-shrink:0;}
+.arrow::before{content:'';position:absolute;left:0;top:50%;width:28px;height:2px;background:#d0d7de;transform:translateY(-50%);}
+.arrow::after{content:'';position:absolute;right:3px;top:50%;border:5px solid transparent;border-left-color:#d0d7de;transform:translateY(-50%);}
+
+/* CARD WRAPPER (voor subtakenrij) (#8) */
+.card-wrapper{display:flex;flex-direction:column;flex-shrink:0;}
+.subtask-row{margin-top:6px;padding:8px 10px;background:rgba(0,0,0,.035);border-radius:8px;display:flex;align-items:flex-start;gap:0;}
+.tl-sub{display:flex;align-items:flex-start;}
+.sub-conn{display:flex;align-items:center;padding-top:30px;flex-shrink:0;}
+.sub-arrow{width:26px;height:16px;position:relative;flex-shrink:0;}
+.sub-arrow::before{content:'';position:absolute;left:0;top:50%;width:20px;height:2px;background:#ccc;transform:translateY(-50%);}
+.sub-arrow::after{content:'';position:absolute;right:2px;top:50%;border:4px solid transparent;border-left-color:#ccc;transform:translateY(-50%);}
+.subtask-toggle{display:flex;align-items:center;gap:5px;padding:5px 14px 8px;font-size:11px;color:var(--muted);cursor:pointer;border-top:1px solid var(--border);transition:color .15s;user-select:none;}
+.subtask-toggle:hover{color:var(--text);}
+
+/* CARDS (#3 deadline dot, #4 narrower, #5 wacht→blauw) */
+.card{border-radius:var(--radius);box-shadow:var(--shadow);background:var(--card);border:2px solid transparent;transition:box-shadow .2s;position:relative;flex-shrink:0;}
+.card:hover{box-shadow:var(--shadow-lg);}
+
+/* actief: groen */
+.card.c-actief{width:fit-content;min-width:235px;max-width:300px;border-color:var(--green);}
+/* wacht: blauw (was geel) */
+.card.c-wacht{width:fit-content;min-width:235px;max-width:300px;border-color:var(--accent);}
+.card.c-geblokkeerd{width:fit-content;min-width:210px;max-width:280px;border-color:#ccc;opacity:.8;}
+.card.c-klaar{width:180px;border-color:#e0e0e0;}
+/* subtaak-variant: wat kleiner */
+.card.sub-card.c-actief,.card.sub-card.c-wacht{min-width:185px;max-width:240px;}
+.card.sub-card.c-klaar{width:150px;}
+.card.sub-card.c-geblokkeerd{min-width:170px;max-width:230px;}
+
+.card-head{padding:11px 14px 8px;border-radius:var(--radius) var(--radius) 0 0;}
+.ch-actief{background:linear-gradient(135deg,#e8f8ef,#d4f0e0);}
+/* wacht nu lichtblauw */
+.ch-wacht{background:linear-gradient(135deg,#e8f4fd,#d0e8f8);}
+.ch-geblokkeerd{background:#f5f5f5;}
+.ch-klaar{background:#f5f5f5;}
+
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:4px;margin-bottom:5px;}
+.b-actief{background:var(--green);color:#fff;}
+/* wacht nu blauw */
+.b-wacht{background:var(--accent);color:#fff;}
+.b-klaar{background:var(--grey);color:#fff;}
+.b-geblokkeerd{background:var(--grey);color:#fff;}
+
+.card-title{font-size:14px;font-weight:600;color:var(--text);line-height:1.3;}
+.c-klaar .card-title{font-size:12px;color:var(--muted);}
+.sub-card .card-title{font-size:13px;}
+
+.card-body{padding:8px 14px 9px;}
+.card-desc{font-size:12px;color:var(--muted);margin-bottom:6px;line-height:1.4;}
+
+/* deadline chip: alleen bolletje, geen rand op kaart (#3) */
+.dl-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 7px;border-radius:4px;margin-bottom:6px;font-weight:500;background:#f0f2f5;color:var(--muted);}
+.dl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.dl-dot-soon{background:var(--orange);}
+.dl-dot-urgent{background:var(--red);}
+
+.card-links{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;}
+.lnk-btn{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;background:#eaf4fb;color:#2471a3;border-radius:4px;font-size:11px;text-decoration:none;border:1px solid #d0e8f5;transition:background .15s;}
+.lnk-btn:hover{background:#d0e8f5;}
+.lnk-outlook{background:#e8f0fe;color:#1a73e8;border-color:#c5d8fb;}
+.lnk-outlook:hover{background:#c5d8fb;}
+
+.folder-row{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);margin-bottom:5px;}
+.folder-path{font-family:monospace;font-size:10px;word-break:break-all;}
+.copy-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:1px 6px;cursor:pointer;font-size:10px;transition:all .15s;flex-shrink:0;}
+.copy-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.log-latest{font-size:11px;color:var(--muted);font-style:italic;margin-top:5px;padding-top:5px;border-top:1px solid var(--border);}
+.card-outcome{font-size:11px;color:#6b7a8d;font-style:italic;margin-top:3px;padding:0 14px 7px;}
+
+/* knoppen op kaart — nowrap (#4) */
+.card-acts{display:flex;gap:5px;padding:0 14px 10px;flex-wrap:nowrap;}
+.ca-btn{padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-size:11px;font-weight:500;transition:all .15s;font-family:inherit;white-space:nowrap;}
+.ca-edit{background:#f0f2f5;color:var(--text);border:1px solid var(--border);}
+.ca-edit:hover{background:#e4e8ed;}
+.ca-done{background:var(--green);color:#fff;}
+.ca-done:hover{background:#229954;}
+.ca-log{background:#f0f2f5;color:var(--muted);border:1px solid var(--border);}
+.ca-log:hover{background:#e4e8ed;}
+
+.blocked-over{position:absolute;inset:0;border-radius:var(--radius);background:rgba(255,255,255,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;pointer-events:none;}
+.lock-ico{font-size:22px;color:var(--grey);}
+.block-lbl{font-size:10px;color:var(--muted);text-align:center;padding:0 10px;}
+
+/* vastgepinde hoofdtaak-indicator */
+.pinned-task-badge{position:absolute;top:6px;left:6px;font-size:9px;background:rgba(0,0,0,.08);color:var(--muted);padding:1px 5px;border-radius:3px;pointer-events:none;}
+
+.drag-hdl{position:absolute;top:7px;right:7px;color:rgba(0,0,0,.15);font-size:13px;cursor:grab;padding:2px;border-radius:3px;line-height:1;}
+.card:hover .drag-hdl{color:rgba(0,0,0,.35);}
+.card[draggable="true"]{cursor:grab;}
+.card.dragging{opacity:.45;cursor:grabbing;}
+.card.drag-over{outline:2px dashed var(--accent);outline-offset:2px;}
+
+.add-card{width:130px;height:68px;border-radius:var(--radius);border:2px dashed #ccc;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#aaa;font-size:12px;gap:4px;flex-shrink:0;transition:all .15s;background:#fff;align-self:center;}
+.add-card:hover{border-color:var(--accent);color:var(--accent);}
+
+/* DEADLINES VIEW */
+.dl-panel{flex:1;overflow-y:auto;padding:24px;}
+.dl-list{display:flex;flex-direction:column;gap:8px;}
+.dl-item{background:var(--card);border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:14px;box-shadow:var(--shadow);border-left:4px solid #ddd;cursor:pointer;transition:box-shadow .15s;}
+.dl-item:hover{box-shadow:var(--shadow-lg);}
+.dl-item.di-ok{border-left-color:var(--accent);}
+.dl-item.di-soon{border-left-color:var(--orange);}
+.dl-item.di-urgent{border-left-color:var(--red);}
+.di-date{font-size:13px;font-weight:700;min-width:88px;white-space:nowrap;}
+.di-date.urgent{color:var(--red);}
+.di-date.soon{color:var(--orange);}
+.di-info{flex:1;min-width:0;}
+.di-task{font-size:14px;font-weight:500;}
+.di-proj{font-size:11px;color:var(--muted);margin-top:2px;}
+.di-badge{padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;white-space:nowrap;}
+
+/* EMPTY STATE */
+.empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--muted);}
+.es-icon{font-size:44px;opacity:.25;}
+.es-title{font-size:15px;font-weight:600;}
+.es-sub{font-size:13px;text-align:center;max-width:280px;line-height:1.5;}
+
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px;}
+.modal{background:var(--card);border-radius:12px;width:100%;max-width:680px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.modal-head{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.modal-title{font-size:16px;font-weight:700;}
+.modal-x{background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;padding:3px 6px;border-radius:4px;line-height:1;}
+.modal-x:hover{background:#f0f2f5;color:var(--text);}
+.modal-body{flex:1;overflow-y:auto;padding:18px 22px;}
+.modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;}
+
+/* FORMS */
+.fg{margin-bottom:14px;}
+.fg label{display:block;font-size:12px;font-weight:600;color:var(--text);margin-bottom:4px;}
+.hint{font-size:11px;color:var(--muted);margin-top:3px;font-style:italic;}
+.fc{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;color:var(--text);background:#fff;transition:border-color .15s;font-family:inherit;}
+.fc:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(52,152,219,.1);}
+textarea.fc{resize:vertical;min-height:72px;}
+.f2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:18px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--border);}
+.links-list{display:flex;flex-direction:column;gap:6px;margin-bottom:7px;}
+.link-row{display:flex;align-items:center;gap:6px;background:#f8f9fa;border-radius:6px;padding:7px 9px;border:1px solid var(--border);}
+.link-row input{border:none;background:none;font-size:12px;color:var(--text);padding:0;font-family:inherit;min-width:0;}
+.link-row input:focus{outline:none;}
+.link-lbl{width:110px;flex-shrink:0;color:var(--muted);}
+.link-url{flex:1;}
+.rm-btn{background:none;border:none;color:var(--red);cursor:pointer;font-size:14px;padding:1px 4px;border-radius:3px;line-height:1;flex-shrink:0;}
+.rm-btn:hover{background:#fdeaea;}
+.add-row-btn{background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;padding:6px 12px;border-radius:6px;font-size:12px;width:100%;transition:all .15s;font-family:inherit;}
+.add-row-btn:hover{border-color:var(--accent);color:var(--accent);}
+.log-box{max-height:160px;overflow-y:auto;padding:8px;background:#f8f9fa;border-radius:6px;border:1px solid var(--border);margin-bottom:8px;}
+.log-entry{font-size:12px;padding:4px 0;border-bottom:1px solid var(--border);}
+.log-entry:last-child{border-bottom:none;}
+.log-ts{font-size:10px;color:var(--muted);font-weight:600;margin-right:6px;}
+.log-input-row{display:flex;gap:6px;}
+.dep-list{max-height:140px;overflow-y:auto;padding:8px;background:#f8f9fa;border-radius:6px;border:1px solid var(--border);display:flex;flex-direction:column;gap:5px;margin-bottom:6px;}
+.dep-item{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;}
+.succ-list{display:flex;flex-direction:column;gap:6px;margin-bottom:7px;}
+.succ-row{display:flex;align-items:center;gap:6px;background:#f8f9fa;border-radius:6px;padding:7px 9px;border:1px solid var(--border);}
+.succ-row input{border:none;background:none;font-size:12px;color:var(--text);padding:0;font-family:inherit;}
+.succ-row input:focus{outline:none;}
+.succ-order{font-size:11px;font-weight:700;color:var(--accent);width:18px;flex-shrink:0;}
+.succ-lbl{flex:1;}
+.succ-sel{flex:1;border:none;background:none;font-size:12px;color:var(--text);font-family:inherit;padding:0;}
+.succ-sel:focus{outline:none;}
+.branch-opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:background .1s;margin-bottom:7px;}
+.branch-opt:hover{background:#f0f8ff;}
+.branch-opt input[type="radio"]{flex-shrink:0;}
+.bo-label{font-weight:600;font-size:13px;}
+.bo-task{font-size:11px;color:var(--muted);margin-top:2px;}
+.bo-pref{margin-left:auto;font-size:10px;color:var(--accent);font-weight:600;flex-shrink:0;}
+.tmpl-row{display:flex;align-items:center;gap:8px;padding:9px 11px;background:#f8f9fa;border-radius:6px;border:1px solid var(--border);margin-bottom:7px;}
+.tmpl-row:last-child{margin-bottom:0;}
+.toast{position:fixed;bottom:22px;right:22px;background:#2c3e50;color:#fff;padding:9px 16px;border-radius:8px;font-size:12px;z-index:2000;box-shadow:var(--shadow-lg);animation:tin .2s ease,tout .25s ease 2.2s forwards;}
+@keyframes tin{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+@keyframes tout{from{opacity:1}to{opacity:0}}
+::-webkit-scrollbar{width:5px;height:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:#ccc;border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:#aaa;}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sb-head">
+    <h1>📋 Projectbeheer</h1>
+    <div class="sb-head-btns">
+      <button class="sb-btn" onclick="exportData()">⬇ Export</button>
+      <label class="sb-btn" style="cursor:pointer">⬆ Import<input type="file" accept=".json" onchange="importData(event)" hidden></label>
+    </div>
+  </div>
+  <nav id="sb-nav" class="sb-nav"></nav>
+  <div class="sb-foot">
+    <div id="dl-nav" class="dl-nav" onclick="showView('deadlines')">📅 Naderende deadlines</div>
+    <button class="sb-add-cat" onclick="addCategory()">+ Nieuwe categorie</button>
+  </div>
+</div>
+
+<main class="main" id="main"></main>
+<div id="modal-root"></div>
+<div id="toasts"></div>
+
+<script>
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════════
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+
+function esc(s) {
+  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDate(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('-');
+  return `${d}-${m}-${y}`;
+}
+function dlClass(iso) {
+  if (!iso) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = (new Date(iso+'T00:00:00') - today) / 86400000;
+  if (diff < 0) return 'urgent';
+  if (diff <= 2) return 'soon';
+  return 'ok';
+}
+function nowStamp() {
+  const n = new Date();
+  return n.toLocaleDateString('nl-NL',{day:'2-digit',month:'2-digit'}) + ' ' +
+         n.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+}
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast'; el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+// ═══════════════════════════════════════════════════════
+// DATA & UNDO (#11)
+// ═══════════════════════════════════════════════════════
+const KEY = 'pb_v1';
+let db = { categories: [] };
+const undoStack = [];
+const MAX_UNDO = 10;
+
+function load() {
+  try { const r = localStorage.getItem(KEY); if (r) db = JSON.parse(r); } catch(e) {}
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch(e) {}
+}
+function pushUndo() {
+  undoStack.push(JSON.stringify(db));
+  if (undoStack.length > MAX_UNDO) undoStack.shift();
+}
+function undo() {
+  if (!undoStack.length) { toast('Niets om ongedaan te maken'); return; }
+  db = JSON.parse(undoStack.pop());
+  save(); render(); toast('Ongedaan gemaakt');
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(db,null,2)],{type:'application/json'});
+  const a = Object.assign(document.createElement('a'),{
+    href:URL.createObjectURL(blob),
+    download:'projectbeheer-'+new Date().toISOString().slice(0,10)+'.json'
+  });
+  a.click(); URL.revokeObjectURL(a.href); toast('Geëxporteerd');
+}
+function importData(ev) {
+  const f = ev.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const imp = JSON.parse(e.target.result);
+      if (!imp.categories) throw new Error('Ongeldig formaat');
+      if (!confirm('Huidige data vervangen met backup?')) { ev.target.value=''; return; }
+      db = imp; save(); st.catId = st.projId = null; render(); toast('Geïmporteerd');
+    } catch(err) { alert('Fout: '+err.message); }
+    ev.target.value = '';
+  };
+  r.readAsText(f);
+}
+
+// Finders
+const getCat  = id => db.categories.find(c => c.id === id);
+const getProj = (cid,pid) => getCat(cid)?.projects.find(p => p.id === pid);
+const getTask = (proj,tid) => proj?.tasks.find(t => t.id === tid);
+
+// Find any task or subtask by id within a project
+function findInProj(proj, id) {
+  for (const t of proj.tasks) {
+    if (t.id === id) return t;
+    for (const s of (t.subtasks||[])) if (s.id === id) return s;
+  }
+  return null;
+}
+// Find parent main task of a subtask
+function findParentTask(proj, subId) {
+  return proj.tasks.find(t => (t.subtasks||[]).some(s => s.id === subId));
+}
+function findProjById(pid) {
+  for (const c of db.categories)
+    for (const p of c.projects)
+      if (p.id === pid) return { cat: c, proj: p };
+  return null;
+}
+function allDeadlineTasks() {
+  const out = [];
+  for (const c of db.categories)
+    for (const p of c.projects)
+      for (const t of p.tasks) {
+        if (t.deadline && t.status !== 'klaar') out.push({t,p,c,parentTitle:null});
+        for (const s of (t.subtasks||[]))
+          if (s.deadline && s.status !== 'klaar') out.push({t:s,p,c,parentTitle:t.title});
+      }
+  return out.sort((a,b) => a.t.deadline.localeCompare(b.t.deadline));
+}
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+const st = {
+  catId: null, projId: null, view: 'project',
+  openCats: new Set(),
+  pinnedOpen: new Set()   // (#1) projIds where pinned note is expanded
+};
+
+// ═══════════════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════════════
+function render() { renderSidebar(); renderMain(); }
+
+function renderSidebar() {
+  document.getElementById('dl-nav').classList.toggle('active', st.view === 'deadlines');
+  document.getElementById('sb-nav').innerHTML = db.categories.map(c => {
+    const open = st.openCats.has(c.id);
+    const tn = (c.templates||[]).length;
+    return `<div class="cat-wrap">
+      <div class="cat-row" onclick="toggleCat('${c.id}')">
+        <span class="cat-arrow ${open?'open':''}">▶</span>
+        <span class="cat-name">${esc(c.name)}</span>
+        <span class="cat-acts">
+          <button class="ic-btn" onclick="event.stopPropagation();manageTemplates('${c.id}')" title="Sjablonen (${tn})">📄${tn?`<b style="font-size:9px">${tn}</b>`:''}</button>
+          <button class="ic-btn" onclick="event.stopPropagation();renameCategory('${c.id}')" title="Hernoem">✏</button>
+          <button class="ic-btn" onclick="event.stopPropagation();deleteCategory('${c.id}')" title="Verwijder">✕</button>
+        </span>
+      </div>
+      <div class="proj-list ${open?'open':''}">
+        ${c.projects.map(p => {
+          const active = st.projId===p.id && st.catId===c.id;
+          return `<div class="proj-row ${active?'active':''}" onclick="selProj('${c.id}','${p.id}')">
+            <span class="proj-dot"></span>
+            <span class="proj-name">${esc(p.name)}</span>
+            <span class="proj-acts">
+              <button class="ic-btn" onclick="event.stopPropagation();renameProject('${c.id}','${p.id}')" title="Hernoem">✏</button>
+              <button class="ic-btn" onclick="event.stopPropagation();deleteProject('${c.id}','${p.id}')" title="Verwijder">✕</button>
+            </span>
+          </div>`;
+        }).join('')}
+        <div class="add-proj" onclick="addProject('${c.id}')"><span>+</span> Nieuw project</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderMain() {
+  const m = document.getElementById('main');
+  if (st.view === 'deadlines') { renderDeadlines(m); return; }
+  if (!st.catId || !st.projId) {
+    m.innerHTML = `<div class="empty-state">
+      <div class="es-icon">📁</div><div class="es-title">Geen project geselecteerd</div>
+      <div class="es-sub">Kies een project in de zijbalk of maak een nieuwe categorie aan.</div>
+    </div>`; return;
+  }
+  const proj = getProj(st.catId, st.projId);
+  if (!proj) { st.projId = null; renderMain(); return; }
+  const cat = getCat(st.catId);
+
+  m.innerHTML = `
+    <div class="main-header">
+      <div class="mh-info">
+        <div class="mh-title">${esc(proj.name)}</div>
+        ${proj.description?`<div class="mh-sub">${esc(proj.description)}</div>`:''}
+        <div class="mh-cat">${esc(cat.name)}</div>
+      </div>
+      <div class="mh-acts">
+        <button class="btn btn-secondary" onclick="editProjectMeta()">⚙ Bewerken</button>
+        <button class="btn btn-primary" onclick="openNewTask()">+ Nieuwe taak</button>
+      </div>
+    </div>
+    ${renderPinned(proj)}
+    <div class="tl-area">
+      <div class="tl" id="tl">${renderTimeline(proj)}</div>
+      <div style="padding-left:18px;align-self:flex-start;padding-top:8px;flex-shrink:0;">
+        <div class="add-card" onclick="openNewTask()">+ Taak</div>
+      </div>
+    </div>`;
+
+  attachDrag(proj);
+}
+
+// (#1) Pinned note — collapsible
+function renderPinned(proj) {
+  const isOpen = st.pinnedOpen.has(proj.id);
+  if (!proj.pinnedNote) {
+    return `<div class="pinned-bar" onclick="editPinnedNote()">
+      <span style="opacity:.4">📌</span>
+      <span class="pinned-preview" style="color:#c8b050;font-style:italic;">Klik om een vastgezette notitie toe te voegen…</span>
+    </div>`;
+  }
+  const firstLine = proj.pinnedNote.split('\n')[0];
+  if (!isOpen) {
+    return `<div class="pinned-bar" onclick="togglePinned('${proj.id}')">
+      <span>📌</span>
+      <span class="pinned-preview">${esc(firstLine)}</span>
+      <span class="pinned-arrow">▶</span>
+      <button class="pinned-edit" onclick="event.stopPropagation();editPinnedNote()" title="Bewerken">✏</button>
+    </div>`;
+  }
+  return `<div class="pinned-full">
+    <span style="cursor:pointer;font-size:14px;margin-top:1px;" onclick="togglePinned('${proj.id}')">📌</span>
+    <span class="pinned-arrow open" style="margin-top:2px;cursor:pointer;" onclick="togglePinned('${proj.id}')">▶</span>
+    <div class="pinned-text">${esc(proj.pinnedNote)}</div>
+    <button class="pinned-edit" onclick="editPinnedNote()">✏</button>
+  </div>`;
+}
+function togglePinned(pid) {
+  st.pinnedOpen.has(pid) ? st.pinnedOpen.delete(pid) : st.pinnedOpen.add(pid);
+  renderMain();
+}
+
+function renderTimeline(proj) {
+  const tasks = [...proj.tasks].sort((a,b) => a.position - b.position);
+  if (!tasks.length) return `<div class="tl-empty">Geen taken — klik op "+ Taak" om te beginnen.</div>`;
+  let html = '';
+  tasks.forEach((t,i) => {
+    if (i > 0) html += `<div class="conn"><div class="arrow"></div></div>`;
+    html += cardWrapperHtml(t, proj);
+  });
+  return html;
+}
+
+// (#8) Card wrapper — haupttaak met uitklapbare subtakenrij
+function cardWrapperHtml(task, proj) {
+  const hasSubs = (task.subtasks||[]).length > 0;
+  const expanded = task.isExpanded && hasSubs;
+  let subRow = '';
+  if (expanded) {
+    const subs = [...task.subtasks].sort((a,b) => a.position - b.position);
+    let subCards = '';
+    subs.forEach((s,i) => {
+      if (i > 0) subCards += `<div class="sub-conn"><div class="sub-arrow"></div></div>`;
+      subCards += cardHtml(s, proj, task);
+    });
+    subRow = `<div class="subtask-row">
+      <div class="tl-sub" id="tl-sub-${task.id}">${subCards}</div>
+      <div style="padding-left:10px;align-self:center;">
+        <div class="add-card" style="width:110px;height:56px;font-size:11px;" onclick="openNewSubtask('${task.id}')">+ Subtaak</div>
+      </div>
+    </div>`;
+  }
+  return `<div class="card-wrapper">${cardHtml(task, proj, null)}${subRow}</div>`;
+}
+
+// Effective status: check requiredTasks anywhere in the project (#8 cross-parent deps)
+function effectiveStatus(task, proj) {
+  if (task.status === 'klaar') return 'klaar';
+  if (task.requiredTasks?.length) {
+    const allDone = task.requiredTasks.every(id => findInProj(proj, id)?.status === 'klaar');
+    if (!allDone) return 'geblokkeerd';
+  }
+  return task.status;
+}
+
+// parentTask = null for main tasks, task object for subtasks
+function cardHtml(task, proj, parentTask) {
+  const isSub = parentTask !== null;
+  const status = effectiveStatus(task, proj);
+  const isKlaar = status === 'klaar';
+  const isBlocked = status === 'geblokkeerd';
+  const hasSubs = !isSub && (task.subtasks||[]).length > 0;
+  const expanded = hasSubs && task.isExpanded;
+  const subCls = isSub ? ' sub-card' : '';
+  const isPinned = !isSub && task.position === 0 && proj.tasks.length > 1;
+
+  // (#3) deadline chip — only dot, no border override on card
+  let dlChip = '';
+  if (task.deadline) {
+    const dc = dlClass(task.deadline);
+    let dot = '';
+    if (dc === 'urgent') dot = '<span class="dl-dot dl-dot-urgent"></span>';
+    else if (dc === 'soon') dot = '<span class="dl-dot dl-dot-soon"></span>';
+    dlChip = `<div class="dl-chip">${dot}📅 ${fmtDate(task.deadline)}</div>`;
+  }
+
+  if (isKlaar) {
+    const subToggle = hasSubs ? `<div class="subtask-toggle" onclick="toggleExpand('${task.id}','${proj.id}')">
+      ${expanded?'▼':'▶'} ${task.subtasks.length} subtaak${task.subtasks.length!==1?'en':''}
+    </div>` : '';
+    const editFn = isSub ? `openEditSubtask('${task.id}','${parentTask.id}')` : `openEditTask('${task.id}')`;
+    return `<div class="card c-klaar${subCls}" data-tid="${task.id}" ${isSub?`data-parent="${parentTask.id}"`:`draggable="true"`}>
+      ${!isSub?'<span class="drag-hdl">⠿</span>':''}
+      <div class="card-head ch-klaar">
+        <span class="badge b-klaar">✓ Afgerond</span>
+        <div class="card-title">${esc(task.title)}</div>
+      </div>
+      ${task.outcome?`<div class="card-outcome">"${esc(task.outcome)}"</div>`:''}
+      ${dlChip?`<div style="padding:0 14px 4px">${dlChip}</div>`:''}
+      <div class="card-acts"><button class="ca-btn ca-edit" onclick="${editFn}">Bekijken</button></div>
+      ${subToggle}
+    </div>`;
+  }
+
+  const statusLabels = {actief:'Actief', wacht:'Wacht op antwoord', geblokkeerd:'Geblokkeerd'};
+
+  let linksHtml = '';
+  if (task.links?.length) {
+    linksHtml = `<div class="card-links">`+
+      task.links.map(l=>`<a class="lnk-btn" href="${esc(l.url)}" target="_blank" rel="noopener">🔗 ${esc(l.label||l.url)}</a>`).join('')+
+    `</div>`;
+  }
+  if (task.outlookLink) {
+    linksHtml += `<div class="card-links"><a class="lnk-btn lnk-outlook" href="${esc(task.outlookLink)}" title="Werkt alleen met Outlook als desktopapplicatie">📧 Outlook</a></div>`;
+  }
+
+  let folderHtml = '';
+  if (task.folderPath) {
+    folderHtml = `<div class="folder-row">📁 <span class="folder-path">${esc(task.folderPath)}</span>
+      <button class="copy-btn" data-path="${esc(task.folderPath)}" onclick="copyPath(this)" title="Klik om het pad te kopiëren, plak het daarna in Verkenner">📋</button>
+    </div>`;
+  }
+
+  let logHtml = '';
+  if (task.logEntries?.length) {
+    const last = task.logEntries[task.logEntries.length-1];
+    logHtml = `<div class="log-latest">📝 <span style="font-weight:600">${esc(last.timestamp)}</span> ${esc(last.text)}</div>`;
+  }
+
+  let blockedOver = '';
+  if (isBlocked) {
+    const missing = (task.requiredTasks||[])
+      .filter(id => findInProj(proj,id)?.status !== 'klaar')
+      .map(id => esc(findInProj(proj,id)?.title || '?'));
+    blockedOver = `<div class="blocked-over"><span class="lock-ico">🔒</span><span class="block-lbl">Wacht op: ${missing.join(', ')}</span></div>`;
+  }
+
+  const subToggle = hasSubs ? `<div class="subtask-toggle" onclick="toggleExpand('${task.id}','${proj.id}')">
+    ${expanded?'▼':'▶'} ${task.subtasks.length} subtaak${task.subtasks.length!==1?'en':''}
+  </div>` : '';
+
+  const editFn  = isSub ? `openEditSubtask('${task.id}','${parentTask.id}')` : `openEditTask('${task.id}')`;
+  const logFn   = isSub ? `quickLog('${task.id}','${parentTask.id}')` : `quickLog('${task.id}',null)`;
+  const doneFn  = isSub ? `completeAny('${task.id}','${parentTask.id}')` : `completeAny('${task.id}',null)`;
+
+  return `<div class="card c-${status}${subCls}" data-tid="${task.id}" ${isSub?`data-parent="${parentTask.id}"`:`draggable="true"`}>
+    ${!isSub?'<span class="drag-hdl">⠿</span>':''}
+    ${isPinned?'<span class="pinned-task-badge">📌 vast</span>':''}
+    <div class="card-head ch-${status}">
+      <span class="badge b-${status}">${statusLabels[status]||status}</span>
+      <div class="card-title">${esc(task.title)}</div>
+    </div>
+    <div class="card-body">
+      ${task.description?`<div class="card-desc">${esc(task.description)}</div>`:''}
+      ${dlChip}${linksHtml}${folderHtml}${logHtml}
+    </div>
+    <div class="card-acts">
+      <button class="ca-btn ca-edit" onclick="${editFn}">✏ Bewerken</button>
+      <button class="ca-btn ca-log" onclick="${logFn}">📝 Log</button>
+      ${!isBlocked?`<button class="ca-btn ca-done" onclick="${doneFn}">✓ Afronden</button>`:''}
+    </div>
+    ${blockedOver}${subToggle}
+  </div>`;
+}
+
+function renderDeadlines(m) {
+  const items = allDeadlineTasks();
+  const sCfg = {
+    actief:{lbl:'Actief',bg:'#e8f8ef',fg:'#27ae60'},
+    wacht:{lbl:'Wacht op antwoord',bg:'#e8f4fd',fg:'#2471a3'},
+    geblokkeerd:{lbl:'Geblokkeerd',bg:'#f5f5f5',fg:'#95a5a6'},
+  };
+  let rows = items.length ? '' : `<div style="color:var(--muted);font-size:14px;padding:20px 0;">Geen taken met deadlines gevonden.</div>`;
+  for (const {t,p,c,parentTitle} of items) {
+    const dc = dlClass(t.deadline);
+    const cfg = sCfg[t.status]||sCfg.actief;
+    let dot = '';
+    if (dc==='urgent') dot = '<span class="dl-dot dl-dot-urgent" style="margin-right:4px;"></span>';
+    else if (dc==='soon') dot = '<span class="dl-dot dl-dot-soon" style="margin-right:4px;"></span>';
+    rows += `<div class="dl-item di-${dc}" onclick="selProj('${c.id}','${p.id}')">
+      <div class="di-date ${dc}">${dot}${fmtDate(t.deadline)}</div>
+      <div class="di-info">
+        <div class="di-task">${esc(t.title)}</div>
+        <div class="di-proj">${esc(c.name)} / ${esc(p.name)}${parentTitle?` › ${esc(parentTitle)}`:''}</div>
+      </div>
+      <div class="di-badge" style="background:${cfg.bg};color:${cfg.fg}">${cfg.lbl}</div>
+    </div>`;
+  }
+  m.innerHTML = `<div class="main-header"><div class="mh-info">
+    <div class="mh-title">📅 Naderende deadlines</div>
+    <div class="mh-sub">Alle openstaande taken met deadline, over alle projecten</div>
+  </div></div><div class="dl-panel"><div class="dl-list">${rows}</div></div>`;
+}
+
+// ═══════════════════════════════════════════════════════
+// DRAG & DROP (main tasks + subtasks) (#8)
+// ═══════════════════════════════════════════════════════
+let dragId = null, dragParentId = null;
+
+function attachDrag(proj) {
+  // Main-task cards (draggable, only non-pinned)
+  document.querySelectorAll('#tl > .card-wrapper > .card[draggable="true"]').forEach(card => {
+    const tid = card.dataset.tid;
+    const task = getTask(proj, tid);
+    if (!task) return;
+    card.addEventListener('dragstart', e => {
+      dragId = tid; dragParentId = null;
+      card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging','drag-over'));
+    card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', e => {
+      e.preventDefault(); card.classList.remove('drag-over');
+      if (dragId && dragId !== tid && dragParentId === null) {
+        pushUndo();
+        const a = getTask(proj, dragId), b = getTask(proj, tid);
+        if (a && b) { [a.position, b.position] = [b.position, a.position]; save(); renderMain(); }
+      }
+    });
+  });
+
+  // Subtask cards (draggable within same parent)
+  proj.tasks.forEach(task => {
+    if (!task.isExpanded || !task.subtasks?.length) return;
+    const subTl = document.getElementById('tl-sub-'+task.id);
+    if (!subTl) return;
+    subTl.querySelectorAll('.card').forEach(card => {
+      const sid = card.dataset.tid;
+      const pid = card.dataset.parent;
+      card.setAttribute('draggable', 'true');
+      card.addEventListener('dragstart', e => {
+        dragId = sid; dragParentId = pid;
+        card.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', () => card.classList.remove('dragging','drag-over'));
+      card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
+      card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+      card.addEventListener('drop', e => {
+        e.preventDefault(); card.classList.remove('drag-over');
+        if (dragId && dragId !== sid && dragParentId === pid) {
+          pushUndo();
+          const parentT = getTask(proj, pid);
+          if (!parentT) return;
+          const a = parentT.subtasks.find(s => s.id === dragId);
+          const b = parentT.subtasks.find(s => s.id === sid);
+          if (a && b) { [a.position, b.position] = [b.position, a.position]; save(); renderMain(); }
+        }
+      });
+    });
+  });
+}
+
+function toggleExpand(taskId, projId) {
+  const r = findProjById(projId); if (!r) return;
+  const task = getTask(r.proj, taskId); if (!task) return;
+  pushUndo();
+  task.isExpanded = !task.isExpanded;
+  save(); renderMain();
+}
+
+// ═══════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════
+function toggleCat(id) {
+  st.openCats.has(id) ? st.openCats.delete(id) : st.openCats.add(id);
+  renderSidebar();
+}
+function selProj(cid,pid) {
+  st.catId=cid; st.projId=pid; st.view='project';
+  st.openCats.add(cid); render();
+}
+function showView(v) { st.view=v; renderSidebar(); renderMain(); }
+
+// ═══════════════════════════════════════════════════════
+// CATEGORY CRUD
+// ═══════════════════════════════════════════════════════
+function addCategory() {
+  const n = prompt('Naam van de nieuwe categorie:'); if (!n?.trim()) return;
+  pushUndo();
+  const c = {id:uid(),name:n.trim(),projects:[],templates:[]};
+  db.categories.push(c); st.openCats.add(c.id); save(); render();
+}
+function renameCategory(id) {
+  const c = getCat(id); if (!c) return;
+  const n = prompt('Nieuwe naam:',c.name); if (!n?.trim()) return;
+  pushUndo(); c.name=n.trim(); save(); render();
+}
+function deleteCategory(id) {
+  const c = getCat(id); if (!c) return;
+  if (!confirm(`Verwijder categorie "${c.name}" en alle projecten erin?`)) return;
+  pushUndo();
+  db.categories = db.categories.filter(x => x.id!==id);
+  if (st.catId===id) { st.catId=null; st.projId=null; }
+  save(); render();
+}
+
+// ═══════════════════════════════════════════════════════
+// PROJECT CRUD
+// ═══════════════════════════════════════════════════════
+function addProject(cid) {
+  const n = prompt('Naam van het nieuwe project:'); if (!n?.trim()) return;
+  const c = getCat(cid); if (!c) return;
+  pushUndo();
+  const p = {id:uid(),name:n.trim(),description:'',pinnedNote:'',tasks:[]};
+  c.projects.push(p); save(); selProj(cid,p.id);
+}
+function renameProject(cid,pid) {
+  const p = getProj(cid,pid); if (!p) return;
+  const n = prompt('Nieuwe naam:',p.name); if (!n?.trim()) return;
+  pushUndo(); p.name=n.trim(); save(); render();
+}
+function deleteProject(cid,pid) {
+  const p = getProj(cid,pid); if (!p) return;
+  if (!confirm(`Verwijder project "${p.name}" en alle taken erin?`)) return;
+  pushUndo();
+  getCat(cid).projects = getCat(cid).projects.filter(x => x.id!==pid);
+  if (st.projId===pid) st.projId=null;
+  save(); render();
+}
+function editProjectMeta() {
+  const proj = getProj(st.catId,st.projId); if (!proj) return;
+  openModal('Project bewerken',`
+    <div class="fg"><label>Naam</label><input class="fc" id="pn" value="${esc(proj.name)}"></div>
+    <div class="fg"><label>Omschrijving</label><textarea class="fc" id="pd">${esc(proj.description)}</textarea></div>
+    <div class="fg"><label>Vastgezette notitie</label><textarea class="fc" id="pp" rows="4">${esc(proj.pinnedNote)}</textarea></div>
+  `,() => {
+    const n = document.getElementById('pn').value.trim();
+    if (!n) { alert('Vul een naam in.'); return false; }
+    pushUndo(); proj.name=n; proj.description=document.getElementById('pd').value.trim();
+    proj.pinnedNote=document.getElementById('pp').value.trim(); save(); render(); return true;
+  });
+}
+function editPinnedNote() {
+  const proj = getProj(st.catId,st.projId); if (!proj) return;
+  openModal('Vastgezette notitie',`
+    <div class="fg"><label>Notitie (altijd zichtbaar bovenaan)</label>
+      <textarea class="fc" id="pn-val" rows="6">${esc(proj.pinnedNote)}</textarea></div>
+  `,() => {
+    pushUndo(); proj.pinnedNote=document.getElementById('pn-val').value.trim();
+    save(); renderMain(); return true;
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// TASK MODAL  (#6 volgorde, #7 mappad, #9 dep-filter, #10 sjablonen)
+// ═══════════════════════════════════════════════════════
+function openNewTask() {
+  const proj = getProj(st.catId,st.projId); if (!proj) return;
+  const maxPos = proj.tasks.reduce((m,t) => Math.max(m,t.position),-1);
+  const task = {
+    id:uid(),title:'',description:'',deadline:null,
+    links:[],outlookLink:'',folderPath:'',
+    logEntries:[],outcome:'',status:'actief',
+    position:maxPos+1,successors:[],requiredTasks:[],chosenSuccessorId:null,
+    subtasks:[],isExpanded:false,templateId:null,templateOverrides:{}
+  };
+  openTaskModal(task,proj,true,null);
+}
+
+function openEditTask(tid) {
+  const proj = getProj(st.catId,st.projId); if (!proj) return;
+  const task = getTask(proj,tid); if (!task) return;
+  openTaskModal(task,proj,false,null);
+}
+
+// (#8) Subtask modals
+function openNewSubtask(parentId) {
+  const proj = getProj(st.catId,st.projId); if (!proj) return;
+  const parent = getTask(proj,parentId); if (!parent) return;
+  if (!parent.subtasks) parent.subtasks = [];
+  const maxPos = parent.subtasks.reduce((m,s) => Math.max(m,s.position),-1);
+  const sub = {
+    id:uid(),title:'',description:'',deadline:null,
+    links:[],outlookLink:'',
+    folderPath: parent.folderPath||'',  // (#7) overerving
+    logEntries:[],outcome:'',status:'actief',
+    position:maxPos+1,successors:[],requiredTasks:[],chosenSuccessorId:null,
+    templateId:null,templateOverrides:{}
+  };
+  openTaskModal(sub,proj,true,parent);
+}
+
+function openEditSubtask(subId, parentId) {
+  const proj = getProj(st.catId,st.projId); if (!proj) return;
+  const parent = getTask(proj,parentId); if (!parent) return;
+  const sub = (parent.subtasks||[]).find(s => s.id===subId); if (!sub) return;
+  openTaskModal(sub,proj,false,parent);
+}
+
+function openTaskModal(task, proj, isNew, parentTask) {
+  const isSub = parentTask !== null;
+  const cat = getCat(st.catId);
+  const templates = cat?.templates||[];
+
+  // (#9) Dep-list filtering
+  let reqHtml = '';
+  if (isSub) {
+    const sibs = (parentTask.subtasks||[]).filter(s => s.id !== task.id);
+    reqHtml = sibs.length
+      ? `<div class="dep-list" id="dep-list">${sibs.map(s =>
+          `<label class="dep-item"><input type="checkbox" value="${s.id}" ${(task.requiredTasks||[]).includes(s.id)?'checked':''}> ${esc(s.title)}</label>`
+        ).join('')}</div>`
+      : `<div style="color:var(--muted);font-size:12px;margin-bottom:6px;">Geen andere subtaken in deze hoofdtaak.</div><div id="dep-list"></div>`;
+
+    // Cross-parent picker
+    const otherParents = proj.tasks.filter(t => t.id !== parentTask.id && (t.subtasks||[]).length);
+    reqHtml += `<div class="fg" style="margin-top:8px;">
+      <label>Afhankelijkheid van andere hoofdtaak:</label>
+      <select class="fc" id="cross-parent-sel" onchange="loadCrossParentOpts(this,'${parentTask.id}','${proj.id}')">
+        <option value="">— Selecteer hoofdtaak —</option>
+        ${otherParents.map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('')}
+      </select>
+      <div id="cross-parent-opts" style="margin-top:6px;"></div>
+    </div>`;
+  } else {
+    const others = proj.tasks.filter(t => t.id !== task.id);
+    reqHtml = others.length
+      ? `<div class="dep-list" id="dep-list">${others.map(t =>
+          `<label class="dep-item"><input type="checkbox" value="${t.id}" ${(task.requiredTasks||[]).includes(t.id)?'checked':''}> ${esc(t.title)}</label>`
+        ).join('')}</div>`
+      : `<div style="color:var(--muted);font-size:12px;">Geen andere taken beschikbaar.</div><div id="dep-list"></div>`;
+  }
+
+  const allTasksForSucc = isSub
+    ? (parentTask.subtasks||[]).filter(s => s.id !== task.id)
+    : proj.tasks.filter(t => t.id !== task.id);
+
+  const taskOptHtml = `<option value="">— kies taak —</option>` +
+    allTasksForSucc.map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('');
+
+  const succHtml = (task.successors||[]).map((s,i) =>
+    `<div class="succ-row" data-sid="${s.id}">
+      <span class="succ-order">${'ABCDE'[i]||i+1}.</span>
+      <input class="succ-lbl" type="text" value="${esc(s.label)}" placeholder="Label…">
+      <select class="succ-sel">${taskOptHtml.replace(`value="${s.taskId}"`,`value="${s.taskId}" selected`)}</select>
+      <button class="rm-btn" onclick="this.closest('.succ-row').remove()">✕</button>
+    </div>`
+  ).join('');
+
+  const linksHtml = (task.links||[]).map(l =>
+    `<div class="link-row" data-lid="${l.id}">
+      <input class="link-lbl" type="text" value="${esc(l.label)}" placeholder="Label…">
+      <input class="link-url" type="text" value="${esc(l.url)}" placeholder="https://…">
+      <button class="rm-btn" onclick="this.closest('.link-row').remove()">✕</button>
+    </div>`
+  ).join('');
+
+  const logSection = isNew ? '' : `
+    <div class="sec">Logboek</div>
+    <div class="fg">
+      <div class="log-box" id="log-box">
+        ${!(task.logEntries||[]).length
+          ? `<div style="color:var(--muted);font-size:12px;">Geen logregels.</div>`
+          : task.logEntries.map(e=>`<div class="log-entry"><span class="log-ts">${esc(e.timestamp)}</span>${esc(e.text)}</div>`).join('')}
+      </div>
+      <div class="log-input-row">
+        <input class="fc" id="new-log" type="text" placeholder="Nieuwe logregel…" style="flex:1;">
+        <button class="btn btn-secondary" onclick="addLogInModal('${task.id}','${isSub?parentTask.id:''}')">+ Toevoegen</button>
+      </div>
+    </div>`;
+
+  const outcomeSection = isNew ? '' : `
+    <div class="fg"><label>Uitkomst / definitief antwoord</label>
+      <textarea class="fc" id="t-outcome" rows="3">${esc(task.outcome||'')}</textarea>
+    </div>`;
+
+  const deleteBtn = isNew ? '' : `
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--border);">
+      <button class="btn btn-danger" onclick="${isSub?`delSubtask('${task.id}','${parentTask.id}')`:` delTask('${task.id}')`}">🗑 Taak verwijderen</button>
+    </div>`;
+
+  // (#10) Template selector (only for new tasks, not subtasks)
+  const tmplSel = (!isSub && isNew && templates.length) ? `
+    <div class="fg"><label>Sjabloon (optioneel)</label>
+      <select class="fc" id="t-tmpl" onchange="applyTemplateToForm(this.value)">
+        <option value="">— Leeg —</option>
+        ${templates.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('')}
+      </select>
+    </div>` : '';
+
+  // (#6) Volgorde: Titel, Omschrijving, Deadline+Status, Afhankelijkheden, Opvolgtaken, Links, Outlook, Mappad
+  const body = `
+    ${tmplSel}
+    <div class="fg"><label>Titel *</label><input class="fc" id="t-title" value="${esc(task.title)}" placeholder="Taaknaam…"></div>
+    <div class="fg"><label>Omschrijving</label><textarea class="fc" id="t-desc" rows="3">${esc(task.description||'')}</textarea></div>
+    <div class="f2">
+      <div class="fg"><label>Deadline</label><input class="fc" id="t-dl" type="date" value="${task.deadline||''}"></div>
+      <div class="fg"><label>Status</label>
+        <select class="fc" id="t-status">
+          ${['actief','wacht','klaar','geblokkeerd'].map(s=>
+            `<option value="${s}" ${task.status===s?'selected':''}>${{actief:'Actief',wacht:'Wacht op antwoord',klaar:'Klaar',geblokkeerd:'Geblokkeerd'}[s]}</option>`
+          ).join('')}
+        </select>
+      </div>
+    </div>
+
+    <div class="sec">Afhankelijkheden</div>
+    <div class="fg"><label>Pas beschikbaar als de volgende taken klaar zijn:</label>${reqHtml}</div>
+
+    <div class="sec">Opvolgtaken bij afronden</div>
+    <div class="fg"><label>Vertakkingen</label>
+      <div class="succ-list" id="succ-list">${succHtml}</div>
+      <button class="add-row-btn" onclick="addSuccRow('${proj.id}','${isSub?parentTask.id:''}')">+ Opvolgtaak toevoegen</button>
+    </div>
+
+    <div class="sec">Links &amp; locatie</div>
+    <div class="fg">
+      <div class="links-list" id="links-list">${linksHtml}</div>
+      <button class="add-row-btn" onclick="addLinkRow()">+ Link toevoegen</button>
+    </div>
+    <div class="fg"><label>Outlook-maillink</label>
+      <input class="fc" id="t-outlook" value="${esc(task.outlookLink||'')}" placeholder="outlook://… of mailto:…">
+      <div class="hint">Werkt alleen met Outlook als desktopapplicatie</div>
+    </div>
+    <div class="fg"><label>Mappad</label>
+      <input class="fc" id="t-folder" value="${esc(task.folderPath||'')}" placeholder="C:\\Zaken\\Dossier of \\\\server\\map">
+      <div class="hint">Een kopieerknop verschijnt op de kaart — plak het pad daarna in Verkenner</div>
+    </div>
+
+    ${outcomeSection}${logSection}${deleteBtn}`;
+
+  openModal(isNew ? (isSub?'Nieuwe subtaak':'Nieuwe taak') : (isSub?'Subtaak bewerken':'Taak bewerken'), body, () => {
+    const title = document.getElementById('t-title').value.trim();
+    if (!title) { alert('Vul een titel in.'); return false; }
+
+    pushUndo();
+    task.title = title;
+    task.description = document.getElementById('t-desc').value.trim();
+    task.deadline = document.getElementById('t-dl').value || null; // (#2)
+    task.status = document.getElementById('t-status').value;
+    task.outlookLink = document.getElementById('t-outlook').value.trim();
+    task.folderPath = document.getElementById('t-folder').value.trim();
+    if (!isNew && document.getElementById('t-outcome'))
+      task.outcome = document.getElementById('t-outcome').value.trim();
+
+    task.links = Array.from(document.querySelectorAll('#links-list .link-row')).map(row => ({
+      id: row.dataset.lid||uid(),
+      label: row.querySelectorAll('input')[0].value.trim(),
+      url:   row.querySelectorAll('input')[1].value.trim()
+    })).filter(l => l.url);
+
+    // required tasks: local deps + cross-parent deps
+    const localDeps = Array.from(document.querySelectorAll('#dep-list input:checked')).map(cb => cb.value);
+    const crossDeps = Array.from(document.querySelectorAll('.cross-dep:checked')).map(cb => cb.value);
+    task.requiredTasks = [...new Set([...localDeps, ...crossDeps])];
+
+    task.successors = Array.from(document.querySelectorAll('#succ-list .succ-row')).map((row,i) => ({
+      id: row.dataset.sid||uid(),
+      label: row.querySelector('.succ-lbl').value.trim(),
+      taskId: row.querySelector('select').value,
+      order: i
+    })).filter(s => s.taskId);
+
+    // (#10) template overrides detection
+    if (task.templateId) {
+      const t = (cat?.templates||[]).find(t => t.id===task.templateId);
+      if (t) detectTemplateOverrides(task, t);
+    }
+
+    // (#10) apply template if newly selected
+    const tmplEl = document.getElementById('t-tmpl');
+    if (tmplEl && tmplEl.value && !task.templateId) {
+      task.templateId = tmplEl.value;
+    }
+
+    if (isNew) {
+      if (isSub) {
+        if (!parentTask.subtasks) parentTask.subtasks = [];
+        parentTask.subtasks.push(task);
+        parentTask.isExpanded = true;
+      } else {
+        proj.tasks.push(task);
+      }
+    }
+
+    save(); renderMain(); return true;
+  });
+}
+
+function addLinkRow() {
+  const id = uid();
+  const div = document.createElement('div');
+  div.className='link-row'; div.dataset.lid=id;
+  div.innerHTML=`<input class="link-lbl" type="text" placeholder="Label…">
+    <input class="link-url" type="text" placeholder="https://…">
+    <button class="rm-btn" onclick="this.closest('.link-row').remove()">✕</button>`;
+  document.getElementById('links-list').appendChild(div);
+  div.querySelector('input').focus();
+}
+
+function addSuccRow(projId, parentId) {
+  const r = findProjById(projId); if (!r) return;
+  const parent = parentId ? getTask(r.proj, parentId) : null;
+  const pool = parent ? (parent.subtasks||[]) : r.proj.tasks;
+  const list = document.getElementById('succ-list');
+  const idx = list.querySelectorAll('.succ-row').length;
+  const id = uid();
+  const opts = `<option value="">— kies taak —</option>`+pool.map(t=>`<option value="${t.id}">${esc(t.title)}</option>`).join('');
+  const div = document.createElement('div');
+  div.className='succ-row'; div.dataset.sid=id;
+  div.innerHTML=`<span class="succ-order">${'ABCDE'[idx]||idx+1}.</span>
+    <input class="succ-lbl" type="text" placeholder="Label…">
+    <select class="succ-sel">${opts}</select>
+    <button class="rm-btn" onclick="this.closest('.succ-row').remove()">✕</button>`;
+  list.appendChild(div);
+  div.querySelector('input').focus();
+}
+
+// (#9) Cross-parent dep loader
+function loadCrossParentOpts(sel, currentParentId, projId) {
+  const r = findProjById(projId); if (!r) return;
+  const container = document.getElementById('cross-parent-opts');
+  if (!sel.value) { container.innerHTML=''; return; }
+  const otherParent = getTask(r.proj, sel.value);
+  if (!otherParent?.subtasks?.length) {
+    container.innerHTML='<div style="color:var(--muted);font-size:12px;">Geen subtaken in deze hoofdtaak.</div>';
+    return;
+  }
+  // Get already-checked cross-parent IDs (from requiredTasks that are NOT siblings)
+  const sibIds = new Set((getTask(r.proj, currentParentId)?.subtasks||[]).map(s=>s.id));
+  container.innerHTML=`<div class="dep-list">`+
+    otherParent.subtasks.map(s=>{
+      const checked = document.querySelectorAll(`#dep-list input[value="${s.id}"]:checked`).length > 0;
+      return `<label class="dep-item"><input type="checkbox" class="cross-dep" value="${s.id}" ${checked?'checked':''}> ${esc(s.title)}</label>`;
+    }).join('')+
+  `</div>`;
+}
+
+function addLogInModal(tid, parentId) {
+  let task = null;
+  const proj = getProj(st.catId, st.projId);
+  if (parentId) {
+    const parent = getTask(proj, parentId);
+    task = (parent?.subtasks||[]).find(s => s.id===tid);
+  } else {
+    task = getTask(proj, tid);
+  }
+  if (!task) return;
+  const text = document.getElementById('new-log').value.trim();
+  if (!text) return;
+  if (!task.logEntries) task.logEntries = [];
+  task.logEntries.push({id:uid(),timestamp:nowStamp(),text});
+  save();
+  document.getElementById('log-box').innerHTML = task.logEntries.map(e=>
+    `<div class="log-entry"><span class="log-ts">${esc(e.timestamp)}</span>${esc(e.text)}</div>`
+  ).join('');
+  document.getElementById('new-log').value = '';
+  toast('Logregel toegevoegd');
+}
+
+// ═══════════════════════════════════════════════════════
+// TASK ACTIONS
+// ═══════════════════════════════════════════════════════
+function completeAny(tid, parentId) {
+  const proj = getProj(st.catId, st.projId); if (!proj) return;
+  let task, isSub = false;
+  if (parentId) {
+    const parent = getTask(proj, parentId);
+    task = (parent?.subtasks||[]).find(s => s.id===tid);
+    isSub = true;
+  } else {
+    task = getTask(proj, tid);
+  }
+  if (!task) return;
+
+  const validSucc = (task.successors||[]).filter(s => s.taskId && findInProj(proj, s.taskId));
+  if (validSucc.length) {
+    openBranchModal(task, proj, validSucc);
+  } else {
+    openModal('Taak afronden',`
+      <div class="fg"><label>Uitkomst / antwoord (optioneel)</label>
+        <textarea class="fc" id="co" rows="4">${esc(task.outcome||'')}</textarea>
+      </div>`,() => {
+      pushUndo();
+      task.outcome = document.getElementById('co').value.trim();
+      task.status = 'klaar'; save(); renderMain(); return true;
+    });
+  }
+}
+
+function openBranchModal(task, proj, successors) {
+  const opts = successors.map((s,i) => {
+    const t2 = findInProj(proj, s.taskId);
+    return `<label class="branch-opt">
+      <input type="radio" name="br" value="${s.id}" ${i===0?'checked':''}>
+      <div><div class="bo-label">${esc(s.label||'Optie '+(i+1))}</div>
+      <div class="bo-task">→ ${esc(t2?.title||'?')}</div></div>
+      ${i===0?'<span class="bo-pref">★ Voorkeur</span>':''}
+    </label>`;
+  }).join('');
+  openModal('Kies vervolg',`
+    <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Selecteer het vervolg na het afronden van <strong>${esc(task.title)}</strong>:</p>
+    ${opts}
+    <div class="fg" style="margin-top:14px;"><label>Uitkomst notitie (optioneel)</label>
+      <input class="fc" id="br-out" type="text" value="${esc(task.outcome||'')}" placeholder="Omschrijf de uitkomst…">
+    </div>`,() => {
+    const chosen = document.querySelector('input[name="br"]:checked');
+    if (!chosen) { alert('Kies een vervolg.'); return false; }
+    pushUndo();
+    const succ = successors.find(s => s.id===chosen.value);
+    task.status = 'klaar'; task.chosenSuccessorId = succ.id;
+    task.outcome = document.getElementById('br-out').value.trim();
+    const succTask = findInProj(proj, succ.taskId);
+    if (succTask && succTask.status !== 'klaar') succTask.status = 'actief';
+    save(); renderMain(); return true;
+  });
+}
+
+function quickLog(tid, parentId) {
+  const proj = getProj(st.catId, st.projId); if (!proj) return;
+  let task = parentId
+    ? (getTask(proj, parentId)?.subtasks||[]).find(s => s.id===tid)
+    : getTask(proj, tid);
+  if (!task) return;
+  openModal('Logregel toevoegen',`
+    <div class="fg"><label>Logregel voor "${esc(task.title)}"</label>
+      <textarea class="fc" id="ql" rows="4" placeholder="Wat is er gebeurd?"></textarea>
+    </div>`,() => {
+    const text = document.getElementById('ql').value.trim();
+    if (!text) { alert('Vul een logregel in.'); return false; }
+    pushUndo();
+    if (!task.logEntries) task.logEntries = [];
+    task.logEntries.push({id:uid(),timestamp:nowStamp(),text});
+    save(); renderMain(); return true;
+  });
+}
+
+function delTask(tid) {
+  const proj = getProj(st.catId, st.projId); if (!proj) return;
+  const task = getTask(proj, tid); if (!task) return;
+  if (!confirm(`Verwijder taak "${task.title}"?`)) return;
+  pushUndo();
+  proj.tasks = proj.tasks.filter(t => t.id!==tid);
+  save(); renderMain(); closeModal();
+}
+
+function delSubtask(sid, parentId) {
+  const proj = getProj(st.catId, st.projId); if (!proj) return;
+  const parent = getTask(proj, parentId); if (!parent) return;
+  const sub = (parent.subtasks||[]).find(s => s.id===sid); if (!sub) return;
+  if (!confirm(`Verwijder subtaak "${sub.title}"?`)) return;
+  pushUndo();
+  parent.subtasks = parent.subtasks.filter(s => s.id!==sid);
+  save(); renderMain(); closeModal();
+}
+
+function copyPath(btn) {
+  const path = btn.dataset.path;
+  const fallback = () => {
+    const ta=document.createElement('textarea'); ta.value=path;
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove(); toast('Pad gekopieerd');
+  };
+  navigator.clipboard ? navigator.clipboard.writeText(path).then(()=>toast('Pad gekopieerd: '+path)).catch(fallback) : fallback();
+}
+
+// ═══════════════════════════════════════════════════════
+// TEMPLATES (#10)
+// ═══════════════════════════════════════════════════════
+function manageTemplates(catId) {
+  const cat = getCat(catId); if (!cat) return;
+  if (!cat.templates) cat.templates = [];
+
+  function listHtml() {
+    return `<div style="display:flex;flex-direction:column;gap:7px;margin-bottom:14px;">
+      ${cat.templates.length ? cat.templates.map(t=>`
+        <div class="tmpl-row">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:13px;">${esc(t.name)}</div>
+            ${t.title?`<div style="font-size:11px;color:var(--muted)">${esc(t.title)}</div>`:''}
+          </div>
+          <button class="ca-btn ca-edit" onclick="editTemplate('${catId}','${t.id}')">✏</button>
+          <button class="ca-btn" style="background:#fdeaea;color:var(--red);" onclick="deleteTemplate('${catId}','${t.id}')">✕</button>
+        </div>`).join('')
+      : '<div style="color:var(--muted);font-size:13px;">Geen sjablonen voor deze categorie.</div>'}
+    </div>
+    <button class="btn btn-primary" onclick="editTemplate('${catId}',null)">+ Nieuw sjabloon</button>`;
+  }
+
+  openModal(`Sjablonen — ${esc(cat.name)}`, listHtml(), () => true);
+  // Hide "Opslaan" button — this is a view-only modal
+  const ok = document.getElementById('modal-ok');
+  if (ok) ok.style.display='none';
+  const cancel = document.querySelector('.modal-foot .btn-secondary');
+  if (cancel) cancel.textContent='Sluiten';
+}
+
+function editTemplate(catId, templateId) {
+  const cat = getCat(catId); if (!cat) return;
+  if (!cat.templates) cat.templates = [];
+  const isNew = !templateId;
+  let t = isNew
+    ? {id:uid(),name:'',title:'',description:'',links:[],folderPath:'',outlookLink:'',successors:[]}
+    : cat.templates.find(x => x.id===templateId);
+  if (!t) return;
+
+  const linksHtml = (t.links||[]).map(l=>
+    `<div class="link-row" data-lid="${l.id||uid()}">
+      <input class="link-lbl" type="text" value="${esc(l.label)}" placeholder="Label…">
+      <input class="link-url" type="text" value="${esc(l.url)}" placeholder="https://…">
+      <button class="rm-btn" onclick="this.closest('.link-row').remove()">✕</button>
+    </div>`).join('');
+
+  openModal(isNew?'Nieuw sjabloon':'Sjabloon bewerken',`
+    <div class="fg"><label>Naam sjabloon *</label><input class="fc" id="tn" value="${esc(t.name)}" placeholder="Naam…"></div>
+    <div class="fg"><label>Standaard taaknaam</label><input class="fc" id="tt" value="${esc(t.title||'')}" placeholder="Taaknaam…"></div>
+    <div class="fg"><label>Omschrijving</label><textarea class="fc" id="td" rows="3">${esc(t.description||'')}</textarea></div>
+    <div class="fg"><label>Mappad</label><input class="fc" id="tf" value="${esc(t.folderPath||'')}" placeholder="C:\\…"></div>
+    <div class="fg"><label>Outlook-maillink</label><input class="fc" id="to" value="${esc(t.outlookLink||'')}" placeholder="outlook://…"></div>
+    <div class="sec">Links</div>
+    <div class="fg">
+      <div class="links-list" id="links-list">${linksHtml}</div>
+      <button class="add-row-btn" onclick="addLinkRow()">+ Link toevoegen</button>
+    </div>
+    ${isNew?'':`<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+      <button class="btn btn-danger" onclick="deleteTemplate('${catId}','${t.id}')">🗑 Sjabloon verwijderen</button>
+    </div>`}
+  `,() => {
+    const name = document.getElementById('tn').value.trim();
+    if (!name) { alert('Vul een naam in.'); return false; }
+    t.name = name;
+    t.title = document.getElementById('tt').value.trim();
+    t.description = document.getElementById('td').value.trim();
+    t.folderPath = document.getElementById('tf').value.trim();
+    t.outlookLink = document.getElementById('to').value.trim();
+    t.links = Array.from(document.querySelectorAll('#links-list .link-row')).map(row=>({
+      id:row.dataset.lid||uid(),
+      label:row.querySelectorAll('input')[0].value.trim(),
+      url:row.querySelectorAll('input')[1].value.trim()
+    })).filter(l=>l.url);
+    if (isNew) cat.templates.push(t);
+    applyTemplateToTasks(catId, t);
+    save(); renderSidebar(); toast(isNew?'Sjabloon aangemaakt':'Sjabloon bijgewerkt'); return true;
+  });
+}
+
+function deleteTemplate(catId, templateId) {
+  const cat = getCat(catId); if (!cat) return;
+  const t = (cat.templates||[]).find(x => x.id===templateId); if (!t) return;
+  if (!confirm(`Sjabloon "${t.name}" verwijderen?`)) return;
+  cat.templates = cat.templates.filter(x => x.id!==templateId);
+  save(); closeModal(); toast('Sjabloon verwijderd');
+}
+
+function applyTemplateToTasks(catId, tmpl) {
+  const cat = getCat(catId); if (!cat) return;
+  for (const p of cat.projects)
+    for (const t of p.tasks) {
+      if (t.templateId===tmpl.id) syncFromTemplate(t,tmpl);
+      for (const s of (t.subtasks||[]))
+        if (s.templateId===tmpl.id) syncFromTemplate(s,tmpl);
+    }
+}
+function syncFromTemplate(task, tmpl) {
+  const ov = task.templateOverrides||{};
+  if (!ov.title && tmpl.title) task.title = tmpl.title;
+  if (!ov.description) task.description = tmpl.description||'';
+  if (!ov.folderPath) task.folderPath = tmpl.folderPath||'';
+  if (!ov.outlookLink) task.outlookLink = tmpl.outlookLink||'';
+  if (!ov.links) task.links = JSON.parse(JSON.stringify(tmpl.links||[]));
+}
+function detectTemplateOverrides(task, tmpl) {
+  task.templateOverrides = task.templateOverrides||{};
+  const ov = task.templateOverrides;
+  if (task.title !== (tmpl.title||'')) ov.title=true; else delete ov.title;
+  if (task.description !== (tmpl.description||'')) ov.description=true; else delete ov.description;
+  if (task.folderPath !== (tmpl.folderPath||'')) ov.folderPath=true; else delete ov.folderPath;
+  if (task.outlookLink !== (tmpl.outlookLink||'')) ov.outlookLink=true; else delete ov.outlookLink;
+  if (JSON.stringify(task.links) !== JSON.stringify(tmpl.links||[])) ov.links=true; else delete ov.links;
+}
+function applyTemplateToForm(templateId) {
+  if (!templateId) return;
+  const cat = getCat(st.catId); if (!cat) return;
+  const t = (cat.templates||[]).find(x => x.id===templateId); if (!t) return;
+  const get = id => document.getElementById(id);
+  if (get('t-title')) get('t-title').value = t.title||'';
+  if (get('t-desc')) get('t-desc').value = t.description||'';
+  if (get('t-folder')) get('t-folder').value = t.folderPath||'';
+  if (get('t-outlook')) get('t-outlook').value = t.outlookLink||'';
+  const ll = document.getElementById('links-list');
+  if (ll) ll.innerHTML = (t.links||[]).map(l=>
+    `<div class="link-row" data-lid="${l.id||uid()}">
+      <input class="link-lbl" type="text" value="${esc(l.label)}" placeholder="Label…">
+      <input class="link-url" type="text" value="${esc(l.url)}" placeholder="https://…">
+      <button class="rm-btn" onclick="this.closest('.link-row').remove()">✕</button>
+    </div>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+// MODAL ENGINE
+// ═══════════════════════════════════════════════════════
+function openModal(title, body, onSave) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div class="overlay" id="modal-overlay">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <div class="modal-title">${esc(title)}</div>
+          <button class="modal-x" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-body">${body}</div>
+        <div class="modal-foot">
+          <button class="btn btn-secondary" onclick="closeModal()">Annuleren</button>
+          <button class="btn btn-primary" id="modal-ok">Opslaan</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-overlay').addEventListener('click', e => {
+    if (e.target.id==='modal-overlay') closeModal();
+  });
+  document.getElementById('modal-ok').addEventListener('click', () => {
+    if (onSave()) closeModal();
+  });
+  setTimeout(() => {
+    const f = root.querySelector('input[type="text"],textarea,input[type="date"],select');
+    if (f) f.focus();
+  }, 40);
+}
+function closeModal() { document.getElementById('modal-root').innerHTML=''; }
+
+// ═══════════════════════════════════════════════════════
+// KEYBOARD SHORTCUTS
+// ═══════════════════════════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (e.key==='Escape') { closeModal(); return; }
+  if ((e.ctrlKey||e.metaKey) && e.key==='z' && !e.shiftKey) {
+    e.preventDefault(); undo();
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+load();
+if (st.catId) st.openCats.add(st.catId);
+render();
+</script>
+</body>
+</html>
