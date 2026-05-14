@@ -267,16 +267,15 @@ textarea.fc{resize:vertical;min-height:72px;}
 .tl-area::-webkit-scrollbar-thumb:horizontal:hover,.proj-tl-area::-webkit-scrollbar-thumb:horizontal:hover{background:#aaa;background-clip:padding-box;}
 
 /* CATEGORIE-VIEW — projecten verticaal gestapeld */
-.cat-projects{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px 24px;display:flex;flex-direction:column;gap:14px;position:relative;isolation:isolate;}
-.proj-block{background:var(--card);border-radius:12px;box-shadow:var(--shadow);border:1px solid var(--border);position:relative;overflow:visible;}
+.cat-projects{flex:1;overflow-y:auto;overflow-x:hidden;padding:16px 24px;display:flex;flex-direction:column;gap:14px;position:relative;}
+.proj-block{background:var(--card);border-radius:12px;box-shadow:var(--shadow);border:1px solid var(--border);}
 .proj-block-head{display:flex;align-items:center;gap:10px;padding:7px 12px;background:#fafbfc;border-bottom:1px solid var(--border);border-radius:12px 12px 0 0;}
 .proj-block.is-collapsed .proj-block-head{border-bottom:none;border-radius:12px;}
-.pbh-toggle{cursor:pointer;color:var(--muted);font-size:11px;width:20px;flex-shrink:0;user-select:none;padding:2px 4px;border-radius:3px;line-height:1;text-align:center;background:#fafbfc;position:relative;z-index:6;}
-.note-toggle{background:#fafbfc;position:relative;z-index:6;}
+.pbh-toggle{cursor:pointer;color:var(--muted);font-size:11px;width:20px;flex-shrink:0;user-select:none;padding:2px 4px;border-radius:3px;line-height:1;text-align:center;}
 .pbh-toggle:hover{color:var(--text);background:#e4e8ed;}
 .pbh-info{flex:1;min-width:0;display:flex;align-items:baseline;gap:0;overflow:hidden;}
-.pbh-name{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;flex-shrink:0;background:#fafbfc;padding:0 4px;border-radius:2px;position:relative;z-index:6;}
-.pbh-desc{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;background:#fafbfc;padding:0 4px;border-radius:2px;position:relative;z-index:6;}
+.pbh-name{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;flex-shrink:0;}
+.pbh-desc{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
 .pbh-acts{display:flex;gap:5px;flex-shrink:0;align-items:center;flex-wrap:wrap;}
 .proj-block-body{display:flex;flex-direction:column;}
 .proj-tl-area{overflow-x:auto;padding:16px 24px 16px;}
@@ -538,11 +537,9 @@ function renderMain() {
   cat.projects.forEach(p => { if (!st.collapsedProjs.has(p.id)) attachDrag(p); });
   requestAnimationFrame(() => {
     drawCrossProjectArrows(cat);
-    cat.projects.forEach(p => { if (!st.collapsedProjs.has(p.id)) drawIntraProjectArrows(p); });
   });
   window.onresize = () => {
     drawCrossProjectArrows(getCat(st.catId));
-    getCat(st.catId)?.projects.forEach(p => drawIntraProjectArrows(p));
   };
 }
 
@@ -897,7 +894,6 @@ function toggleProjCollapse(projId) {
   if (!st.collapsedProjs.has(projId)) attachDrag(proj);
   requestAnimationFrame(() => {
     drawCrossProjectArrows(cat);
-    if (!st.collapsedProjs.has(projId)) drawIntraProjectArrows(proj);
   });
 }
 
@@ -1029,67 +1025,6 @@ function drawCrossProjectArrows(cat) {
 
   container.onscroll = () => drawCrossProjectArrows(cat);
   document.querySelectorAll('.proj-tl-area').forEach(el => el.onscroll = () => drawCrossProjectArrows(cat));
-}
-
-// ── BINNEN-PROJECT BOGEN ────────────────────────────────
-function drawIntraProjectArrows(proj) {
-  const tlEl = document.getElementById('tl-'+proj.id);
-  if (!tlEl) return;
-
-  // Verwijder bestaande SVG voor dit project
-  const existId = 'intra-svg-'+proj.id;
-  const existing = document.getElementById(existId);
-  if (existing) existing.remove();
-
-  const paths = [];
-  const tasks = [...proj.tasks].sort((a,b) => a.position - b.position);
-
-  for (const task of tasks) {
-    if (!task.requiredTasks?.length) continue;
-    const toEl = tlEl.querySelector(`[data-tid="${task.id}"]`);
-    if (!toEl) continue;
-    const toRect = toEl.getBoundingClientRect();
-    const tlRect = tlEl.getBoundingClientRect();
-
-    for (const reqId of task.requiredTasks) {
-      // Alleen binnen-project dependencies die nog niet klaar zijn
-      const reqTask = findInProj(proj, reqId);
-      if (!reqTask) continue;
-      if (reqTask.status === 'klaar') continue; // dependency opgelost → geen boog
-      const fromEl = tlEl.querySelector(`[data-tid="${reqId}"]`);
-      if (!fromEl) continue;
-      const fromRect = fromEl.getBoundingClientRect();
-
-      // Coördinaten relatief aan tlEl — bovenkant van elk kaartje, horizontaal gecentreerd
-      const x1 = fromRect.left + fromRect.width / 2 - tlRect.left + tlEl.scrollLeft;
-      const x2 = toRect.left + toRect.width / 2 - tlRect.left + tlEl.scrollLeft;
-      const y1 = fromRect.top - tlRect.top + tlEl.scrollTop;
-      const y2 = toRect.top - tlRect.top + tlEl.scrollTop;
-
-      // Hoogte van de boog: minimaal 40px boven het hoogste kaartje
-      const arcTop = Math.min(y1, y2) - 40;
-
-      paths.push(`<path d="M${x1.toFixed(1)},${y1.toFixed(1)} C${x1.toFixed(1)},${arcTop.toFixed(1)} ${x2.toFixed(1)},${arcTop.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}"
-        fill="none" stroke="#94a3b8" stroke-width="2" marker-end="url(#ipa-${proj.id})"/>`);
-    }
-  }
-
-  if (!paths.length) return;
-
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.id = existId;
-  svg.style.cssText = `position:absolute;top:0;left:0;width:${tlEl.scrollWidth}px;height:${tlEl.scrollHeight + 50}px;pointer-events:none;z-index:1;overflow:visible;`;
-  svg.innerHTML = `<defs>
-    <marker id="ipa-${proj.id}" markerWidth="7" markerHeight="5" refX="7" refY="2.5" orient="auto">
-      <polygon points="0 0,7 2.5,0 5" fill="#94a3b8"/>
-    </marker>
-  </defs>${paths.join('')}`;
-
-  // tlEl moet position:relative hebben
-  tlEl.style.position = 'relative';
-  tlEl.appendChild(svg);
-
-  tlEl.onscroll = () => drawIntraProjectArrows(proj);
 }
 
 // ═══════════════════════════════════════════════════════
