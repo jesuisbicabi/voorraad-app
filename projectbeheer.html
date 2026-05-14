@@ -148,9 +148,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .log-latest{font-size:11px;color:var(--muted);font-style:italic;margin-top:5px;padding-top:5px;border-top:1px solid var(--border);}
 .card-outcome{font-size:11px;color:#6b7a8d;font-style:italic;margin-top:3px;padding:0 14px 7px;}
 
-/* knoppen op kaart — nowrap (#4) */
-.card-acts{display:flex;gap:5px;padding:0 14px 10px;flex-wrap:nowrap;}
-.ca-btn{padding:4px 10px;border-radius:5px;border:none;cursor:pointer;font-size:11px;font-weight:500;transition:all .15s;font-family:inherit;white-space:nowrap;}
+/* knoppen op kaart — wrappen als kaart smal is */
+.card-acts{display:flex;gap:5px;padding:0 14px 10px;flex-wrap:wrap;}
+.ca-btn{padding:4px 8px;border-radius:5px;border:none;cursor:pointer;font-size:11px;font-weight:500;transition:all .15s;font-family:inherit;white-space:nowrap;flex-shrink:1;min-width:0;}
 .ca-edit{background:#f0f2f5;color:var(--text);border:1px solid var(--border);}
 .ca-edit:hover{background:#e4e8ed;}
 .ca-done{background:var(--green);color:#fff;}
@@ -625,11 +625,24 @@ function cardWrapperHtml(task, proj) {
   return `<div class="card-wrapper">${cardHtml(task, proj, null)}${subRow}</div>`;
 }
 
-// Effective status: check requiredTasks anywhere in the project (#8 cross-parent deps)
+// Zoek een taak op id in alle projecten van alle categorieën
+function findTaskAnywhere(id) {
+  for (const c of db.categories)
+    for (const p of c.projects) {
+      const t = findInProj(p, id);
+      if (t) return t;
+    }
+  return null;
+}
+
+// Effective status: check requiredTasks in eigen project én cross-project
 function effectiveStatus(task, proj) {
   if (task.status === 'klaar') return 'klaar';
   if (task.requiredTasks?.length) {
-    const allDone = task.requiredTasks.every(id => findInProj(proj, id)?.status === 'klaar');
+    const allDone = task.requiredTasks.every(id => {
+      const t = findInProj(proj, id) || findTaskAnywhere(id);
+      return t?.status === 'klaar';
+    });
     if (!allDone) return 'geblokkeerd';
   }
   return task.status;
@@ -658,16 +671,19 @@ function cardHtml(task, proj, parentTask) {
 
   const ctx = `st.projId='${proj.id}';`;
   const pinFn = isSub ? `${ctx}togglePin('${task.id}','${parentTask.id}')` : `${ctx}togglePin('${task.id}',null)`;
-  const pinBtn = `<button class="pin-btn${task.pinned?' is-pinned':''}" onclick="event.stopPropagation();${pinFn}" title="${task.pinned?'Losmaken':'Vastzetten'}">📌</button>`;
+  const isDepPinned = task.depPinned === true;  // vastgepind door pijlverbinding
+  const pinIcon = isDepPinned ? '🔵' : '📌';
+  const pinTitle = isDepPinned ? 'Vastgezet door verbinding — klik om positie vrij te geven' : (task.pinned ? 'Losmaken' : 'Vastzetten');
+  const pinBtn = `<button class="pin-btn${(task.pinned||isDepPinned)?' is-pinned':''}" onclick="event.stopPropagation();${pinFn}" title="${pinTitle}">${pinIcon}</button>`;
 
   if (isKlaar) {
     const subToggle = hasSubs ? `<div class="subtask-toggle" onclick="toggleExpand('${task.id}','${proj.id}')">
       ${expanded?'▼':'▶'} ${task.subtasks.length} subtaak${task.subtasks.length!==1?'en':''}
     </div>` : '';
     const editFn = isSub ? `${ctx}openEditSubtask('${task.id}','${parentTask.id}')` : `${ctx}openEditTask('${task.id}')`;
-    return `<div class="card c-klaar${subCls}" data-tid="${task.id}" ${isSub?`data-parent="${parentTask.id}"`:(!task.pinned?'draggable="true"':'')}>
+    return `<div class="card c-klaar${subCls}" data-tid="${task.id}" ${isSub?`data-parent="${parentTask.id}"`:(!task.pinned && !task.depPinned?'draggable="true"':'')}>
       ${pinBtn}
-      ${!isSub && !task.pinned?'<span class="drag-hdl">⠿</span>':''}
+      ${!isSub && !task.pinned && !task.depPinned?'<span class="drag-hdl">⠿</span>':''}
       <div class="card-head ch-klaar">
         <span class="badge b-klaar">✓ Afgerond</span>
         <div class="card-title">${esc(task.title)}</div>
@@ -731,9 +747,9 @@ function cardHtml(task, proj, parentTask) {
   const logFn   = isSub ? `${ctx}quickLog('${task.id}','${parentTask.id}')` : `${ctx}quickLog('${task.id}',null)`;
   const doneFn  = isSub ? `${ctx}completeAny('${task.id}','${parentTask.id}')` : `${ctx}completeAny('${task.id}',null)`;
 
-  return `<div class="card c-${status}${subCls}" data-tid="${task.id}" ${isSub?`data-parent="${parentTask.id}"`:(!task.pinned?'draggable="true"':'')}>
+  return `<div class="card c-${status}${subCls}" data-tid="${task.id}" ${isSub?`data-parent="${parentTask.id}"`:(!task.pinned && !task.depPinned?'draggable="true"':'')}>
     ${pinBtn}
-    ${!isSub && !task.pinned?'<span class="drag-hdl">⠿</span>':''}
+    ${!isSub && !task.pinned && !task.depPinned?'<span class="drag-hdl">⠿</span>':''}
     <div class="card-head ch-${status}">
       <span class="badge b-${status}">${statusLabels[status]||status}</span>
       <div class="card-title">${esc(task.title)}</div>
@@ -1622,7 +1638,12 @@ function togglePin(tid, parentId) {
   }
   if (!task) return;
   pushUndo();
-  task.pinned = !task.pinned;
+  if (task.depPinned) {
+    // Klikken op 🔵: geeft positie vrij maar laat dependency intact
+    task.depPinned = false;
+  } else {
+    task.pinned = !task.pinned;
+  }
   save(); renderMain();
 }
 
@@ -1798,7 +1819,7 @@ function openModal(title, body, onSave) {
       </div>
     </div>`;
   document.getElementById('modal-overlay').addEventListener('click', e => {
-    if (e.target.id==='modal-overlay') closeModal();
+    // Modal sluit NIET bij klikken buiten — alleen via Opslaan of Annuleren
   });
   document.getElementById('modal-ok').addEventListener('click', () => {
     if (onSave()) closeModal();
