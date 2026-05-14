@@ -1056,7 +1056,6 @@ function drawIntraProjectArrows(proj) {
       if (!reqTask) continue;
       if (reqTask.status === 'klaar') continue; // dependency opgelost → geen boog
       const fromEl = tlEl.querySelector(`[data-tid="${reqId}"]`);
-      const fromEl = tlEl.querySelector(`[data-tid="${reqId}"]`);
       if (!fromEl) continue;
       const fromRect = fromEl.getBoundingClientRect();
 
