@@ -94,7 +94,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .subtask-toggle:hover{color:var(--text);}
 
 /* CARDS (#3 deadline dot, #4 narrower, #5 wacht→blauw) */
-.card{border-radius:var(--radius);box-shadow:var(--shadow);background:var(--card);border:2px solid transparent;transition:box-shadow .2s;position:relative;flex-shrink:0;z-index:1;}
+.card{border-radius:var(--radius);box-shadow:var(--shadow);background:var(--card);border:2px solid transparent;transition:box-shadow .2s;position:relative;flex-shrink:0;z-index:2;}
 .card:hover{box-shadow:var(--shadow-lg);}
 
 /* actief: groen */
@@ -108,7 +108,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .card.sub-card.c-klaar{width:150px;}
 .card.sub-card.c-geblokkeerd{min-width:170px;max-width:230px;}
 
-.card-head{padding:11px 14px 8px;border-radius:var(--radius) var(--radius) 0 0;}
+.card-head{padding:11px 14px 8px;border-radius:var(--radius) var(--radius) 0 0;position:relative;z-index:3;}
 .ch-actief{background:linear-gradient(135deg,#e8f8ef,#d4f0e0);}
 /* wacht nu lichtblauw */
 .ch-wacht{background:linear-gradient(135deg,#e8f4fd,#d0e8f8);}
@@ -733,16 +733,20 @@ function cardHtml(task, proj, parentTask) {
       const t = findInProj(proj, id) || findTaskAnywhere(id);
       return t && t.status !== 'klaar';
     });
-    const labels = stillBlocked.map(id => {
-      const inOwn = findInProj(proj, id);
-      if (inOwn) return esc(inOwn.title);
-      // Cross-project: zoek in andere projecten
-      const t = findTaskAnywhere(id);
-      return t ? `↕ ${esc(t.title)}` : '?';
-    }).filter(Boolean);
+    // Splits in eigen project en cross-project
+    const ownLabels = stillBlocked
+      .filter(id => findInProj(proj, id))
+      .map(id => esc(findInProj(proj, id).title));
+    const crossLabels = stillBlocked
+      .filter(id => !findInProj(proj, id))
+      .map(id => {
+        const t = findTaskAnywhere(id);
+        return t ? `↕ ${esc(t.title)}` : null;
+      }).filter(Boolean);
+    const allLabels = [...ownLabels, ...crossLabels];
     blockedOver = `<div class="blocked-over">
       <span class="lock-ico">🔒</span>
-      ${labels.length ? `<span class="block-lbl">Wacht op: ${labels.join(', ')}</span>` : ''}
+      ${allLabels.length ? `<span class="block-lbl">${allLabels.join(' · ')}</span>` : ''}
     </div>`;
   }
 
@@ -909,8 +913,12 @@ function getCrossProjectDeps(cat) {
     const check = (taskId, deps) => {
       for (const rid of (deps||[])) {
         const tpid = taskToProj[rid];
-        if (tpid && tpid !== p.id)
+        if (tpid && tpid !== p.id) {
+          // Alleen tekenen als de vereiste taak nog niet klaar is
+          const reqTask = findTaskAnywhere(rid);
+          if (reqTask && reqTask.status === 'klaar') continue;
           result.push({fromProjId:p.id, fromTaskId:taskId, toProjId:tpid, toTaskId:rid});
+        }
       }
     };
     for (const t of p.tasks) {
@@ -1043,8 +1051,11 @@ function drawIntraProjectArrows(proj) {
     const tlRect = tlEl.getBoundingClientRect();
 
     for (const reqId of task.requiredTasks) {
-      // Alleen binnen-project dependencies
-      if (!findInProj(proj, reqId)) continue;
+      // Alleen binnen-project dependencies die nog niet klaar zijn
+      const reqTask = findInProj(proj, reqId);
+      if (!reqTask) continue;
+      if (reqTask.status === 'klaar') continue; // dependency opgelost → geen boog
+      const fromEl = tlEl.querySelector(`[data-tid="${reqId}"]`);
       const fromEl = tlEl.querySelector(`[data-tid="${reqId}"]`);
       if (!fromEl) continue;
       const fromRect = fromEl.getBoundingClientRect();
