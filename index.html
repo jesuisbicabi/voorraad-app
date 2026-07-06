@@ -576,7 +576,6 @@
 <div class="toast" id="toast"></div>
 
 <input type="file" id="foto-input" class="foto-upload-input" accept="image/*" onchange="verwerkFotoKeuze(this)">
-<input type="file" id="foto-input-camera" class="foto-upload-input" accept="image/*" capture="environment" onchange="verwerkFotoKeuze(this)">
 
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaJ6D0UMe1lMVsYkRfnqTYmEz-SHR4iAuVrlx3WVXHJeTMDVSXlZYLVZuyeIJcY37g/exec';
@@ -1437,7 +1436,19 @@ async function laadFotoInModal(r) {
 }
 
 function kiesFoto(bron) {
-  document.getElementById(bron === 'camera' ? 'foto-input-camera' : 'foto-input').click();
+  if (bron === 'camera') {
+    const tmp = document.createElement('input');
+    tmp.type = 'file';
+    tmp.accept = 'image/*';
+    tmp.setAttribute('capture', 'environment');
+    tmp.style.display = 'none';
+    tmp.onchange = function() { verwerkFotoKeuze(tmp); };
+    document.body.appendChild(tmp);
+    tmp.click();
+    setTimeout(function() { document.body.removeChild(tmp); }, 5000);
+  } else {
+    document.getElementById('foto-input').click();
+  }
 }
 
 async function verwerkFotoKeuze(input) {
