@@ -503,6 +503,19 @@
   }
 
   .empty { text-align: center; padding: 30px; color: var(--text2); font-size: 14px; }
+
+  .foto-badge {
+    position: absolute;
+    bottom: 1px;
+    right: 1px;
+    font-size: 10px;
+    background: var(--accent);
+    color: white;
+    border-radius: 3px;
+    padding: 1px 3px;
+    line-height: 1.4;
+  }
+  .foto-upload-input { display: none; }
 </style>
 </head>
 <body>
@@ -562,8 +575,10 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<input type="file" id="foto-input" class="foto-upload-input" accept="image/*" capture="environment" onchange="verwerkFotoKeuze(this)">
+
 <script>
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzVeDtVUI1BLT-iW0yZUanH9iAC4z6ZSOV_UEODTeYwA5KewpP0CmzeB-WaXURRyv3P/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwtTBAJH9Hv6zHPW4GiZgNt-U9MQIcK5kyOMfBaW8EB1ig0MzluJRoAOrTXilve91vf/exec';
 const ANTHROPIC_KEY_STORAGE = 'voorraad_api_key';
 
 let allData = [];
@@ -758,7 +773,7 @@ function productItemHTML(r) {
     ? `<span style="color:var(--text2)">${aantal % 1 !== 0 ? aantal.toFixed(2) : aantal} st × ${grPerStuk} gr</span>`
     : r.Comment ? `<span style="color:var(--text2)">${String(r.Comment).substring(0,30)}${String(r.Comment).length>30?'…':''}</span>` : '';
   return `<div class="product-item ${cls}" onclick='openModal(${JSON.stringify(r)})'>
-    <div class="product-photo">${r.Foto ? `<img src="${r.Foto}" style="width:100%;height:100%;border-radius:8px;object-fit:cover">` : emoji}</div>
+    <div class="product-photo" style="position:relative">${emoji}${r.Foto ? '<span class="foto-badge">📷</span>' : ''}</div>
     <div class="product-info">
       <div class="product-name">${r.Productnaam}</div>
       <div class="product-meta">
@@ -795,7 +810,7 @@ function openModal(r) {
   document.getElementById('modal-content').innerHTML = `
     <div class="modal-title">${r.Productnaam}</div>
     <div class="modal-cat">${r['Categorieën'] || ''}</div>
-    ${r.Foto ? `<img src="${r.Foto}" style="width:100%;height:160px;object-fit:cover;border-radius:10px;margin-bottom:12px">` : ''}
+    <div id="foto-modal-sectie"></div>
     <div class="modal-field">
       <span class="modal-field-label">Locatie</span>
       <input class="modal-field-input" id="edit-locatie" value="${(r.Opslagplaats || '').replace(/"/g,'&quot;')}">
@@ -822,6 +837,7 @@ function openModal(r) {
     </div>
   `;
   document.getElementById('modal-overlay').classList.add('open');
+  laadFotoInModal(r);
 }
 
 function parseDateToISO(s) {
@@ -1378,6 +1394,112 @@ Geef ALLEEN geldige JSON, geen tekst eromheen.`
   } catch(e) {
     document.getElementById('mic-status').textContent = 'Fout: ' + e.message;
     console.error('Verwerkingsfout:', e);
+  }
+}
+
+const fotoCache = {};
+
+async function haalFotoOp(fileId) {
+  if (fotoCache[fileId]) return fotoCache[fileId];
+  const resp = await fetchGAS({action: 'getFoto', fileId: fileId});
+  if (resp.error) throw new Error(resp.error);
+  const dataUrl = 'data:' + resp.mimeType + ';base64,' + resp.data;
+  fotoCache[fileId] = dataUrl;
+  return dataUrl;
+}
+
+async function laadFotoInModal(r) {
+  const sectie = document.getElementById('foto-modal-sectie');
+  if (!sectie) return;
+  if (!r.Foto) {
+    sectie.innerHTML = '<button class="modal-btn secondary" style="margin-bottom:12px" onclick="kiesFoto()">📷 Foto toevoegen</button>';
+    return;
+  }
+  sectie.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text2)">Foto laden...</div>';
+  try {
+    const dataUrl = await haalFotoOp(r.Foto);
+    sectie.innerHTML = '<img src="' + dataUrl + '" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-bottom:8px">' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+      '<button class="modal-btn secondary" onclick="kiesFoto()">📷 Vervangen</button>' +
+      '<button class="modal-btn primary" onclick="deelFoto()">📤 Deel naar Joa</button>' +
+      '</div>';
+  } catch(e) {
+    sectie.innerHTML = '<button class="modal-btn secondary" style="margin-bottom:12px" onclick="kiesFoto()">📷 Foto toevoegen</button>';
+  }
+}
+
+function kiesFoto() {
+  document.getElementById('foto-input').click();
+}
+
+async function verwerkFotoKeuze(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  showToast('Foto verkleinen...');
+  try {
+    const dataUrl = await verkleinFoto(file);
+    const base64 = dataUrl.split(',')[1];
+    showToast('Foto uploaden...');
+    const resp = await fetchGAS({
+      action: 'uploadFoto',
+      Productnaam: modalProduct.Productnaam,
+      Opslagplaats: modalProduct.Opslagplaats,
+      fotoBase64: base64,
+      mimeType: 'image/jpeg'
+    });
+    if (resp.error) throw new Error(resp.error);
+    const idx = allData.findIndex(function(x) { return x.Productnaam === modalProduct.Productnaam && x.Opslagplaats === modalProduct.Opslagplaats; });
+    if (idx >= 0) allData[idx].Foto = resp.fileId;
+    modalProduct.Foto = resp.fileId;
+    fotoCache[resp.fileId] = dataUrl;
+    localStorage.setItem('voorraad_cache', JSON.stringify(allData));
+    showToast('✓ Foto opgeslagen');
+    laadFotoInModal(modalProduct);
+    renderTab();
+  } catch(e) {
+    showToast('Fout bij foto: ' + e.message);
+  }
+}
+
+function verkleinFoto(file) {
+  return new Promise(function(resolve, reject) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      const MAX = 1024;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function deelFoto() {
+  if (!modalProduct || !modalProduct.Foto) return;
+  try {
+    const dataUrl = await haalFotoOp(modalProduct.Foto);
+    const blob = await fetch(dataUrl).then(function(r) { return r.blob(); });
+    const file = new File([blob], (modalProduct.Productnaam || 'foto') + '.jpg', {type: 'image/jpeg'});
+    if (navigator.canShare && navigator.canShare({files: [file]})) {
+      await navigator.share({files: [file], title: modalProduct.Productnaam});
+    } else {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = (modalProduct.Productnaam || 'foto') + '.jpg';
+      a.click();
+    }
+  } catch(e) {
+    if (e.name !== 'AbortError') showToast('Delen mislukt: ' + e.message);
   }
 }
 
