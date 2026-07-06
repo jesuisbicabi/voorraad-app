@@ -576,6 +576,7 @@
 <div class="toast" id="toast"></div>
 
 <input type="file" id="foto-input" class="foto-upload-input" accept="image/*" onchange="verwerkFotoKeuze(this)">
+<input type="file" id="foto-input-camera" class="foto-upload-input" accept="image/*" capture="environment" onchange="verwerkFotoKeuze(this)">
 
 <script>
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxaJ6D0UMe1lMVsYkRfnqTYmEz-SHR4iAuVrlx3WVXHJeTMDVSXlZYLVZuyeIJcY37g/exec';
@@ -1412,7 +1413,10 @@ async function laadFotoInModal(r) {
   const sectie = document.getElementById('foto-modal-sectie');
   if (!sectie) return;
   if (!r.Foto) {
-    sectie.innerHTML = '<button class="modal-btn secondary" style="margin-bottom:12px" onclick="kiesFoto()">📷 Foto toevoegen</button>';
+    sectie.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+      '<button class="modal-btn secondary" onclick="kiesFoto(\'camera\')">📷 Camera</button>' +
+      '<button class="modal-btn secondary" onclick="kiesFoto(\'galerij\')">🖼️ Galerij</button>' +
+      '</div>';
     return;
   }
   sectie.innerHTML = '<div style="text-align:center;padding:16px;color:var(--text2)">Foto laden...</div>';
@@ -1420,16 +1424,20 @@ async function laadFotoInModal(r) {
     const dataUrl = await haalFotoOp(r.Foto);
     sectie.innerHTML = '<img src="' + dataUrl + '" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-bottom:8px">' +
       '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-      '<button class="modal-btn secondary" onclick="kiesFoto()">📷 Vervangen</button>' +
+      '<button class="modal-btn secondary" onclick="kiesFoto(\'camera\')">📷 Camera</button>' +
+      '<button class="modal-btn secondary" onclick="kiesFoto(\'galerij\')">🖼️ Galerij</button>' +
       '<button class="modal-btn primary" onclick="deelFoto()">📤 Deel naar Joa</button>' +
       '</div>';
   } catch(e) {
-    sectie.innerHTML = '<button class="modal-btn secondary" style="margin-bottom:12px" onclick="kiesFoto()">📷 Foto toevoegen</button>';
+    sectie.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+      '<button class="modal-btn secondary" onclick="kiesFoto(\'camera\')">📷 Camera</button>' +
+      '<button class="modal-btn secondary" onclick="kiesFoto(\'galerij\')">🖼️ Galerij</button>' +
+      '</div>';
   }
 }
 
-function kiesFoto() {
-  document.getElementById('foto-input').click();
+function kiesFoto(bron) {
+  document.getElementById(bron === 'camera' ? 'foto-input-camera' : 'foto-input').click();
 }
 
 async function verwerkFotoKeuze(input) {
