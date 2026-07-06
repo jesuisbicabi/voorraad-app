@@ -1422,10 +1422,11 @@ async function laadFotoInModal(r) {
   try {
     const dataUrl = await haalFotoOp(r.Foto);
     sectie.innerHTML = '<img src="' + dataUrl + '" style="width:100%;max-height:220px;object-fit:cover;border-radius:10px;margin-bottom:8px">' +
-      '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">' +
       '<button class="modal-btn secondary" onclick="kiesFoto(\'camera\')">📷 Camera</button>' +
       '<button class="modal-btn secondary" onclick="kiesFoto(\'galerij\')">🖼️ Galerij</button>' +
-      '<button class="modal-btn primary" onclick="deelFoto()">📤 Deel naar Joa</button>' +
+      '<button class="modal-btn primary" onclick="deelFoto()">📤 Delen</button>' +
+      '<button class="modal-btn danger" onclick="verwijderFoto()">🗑️ Verwijderen</button>' +
       '</div>';
   } catch(e) {
     sectie.innerHTML = '<div style="display:flex;gap:8px;margin-bottom:12px">' +
@@ -1501,6 +1502,25 @@ function verkleinFoto(file) {
     img.onerror = reject;
     img.src = url;
   });
+}
+
+async function verwijderFoto() {
+  if (!modalProduct || !modalProduct.Foto) return;
+  if (!confirm('Foto verwijderen?')) return;
+  try {
+    const resp = await fetchGAS({action: 'deleteFoto', Productnaam: modalProduct.Productnaam, Opslagplaats: modalProduct.Opslagplaats});
+    if (resp.error) throw new Error(resp.error);
+    delete fotoCache[modalProduct.Foto];
+    const idx = allData.findIndex(function(x) { return x.Productnaam === modalProduct.Productnaam && x.Opslagplaats === modalProduct.Opslagplaats; });
+    if (idx >= 0) allData[idx].Foto = '';
+    modalProduct.Foto = '';
+    localStorage.setItem('voorraad_cache', JSON.stringify(allData));
+    showToast('✓ Foto verwijderd');
+    laadFotoInModal(modalProduct);
+    renderTab();
+  } catch(e) {
+    showToast('Fout bij verwijderen: ' + e.message);
+  }
 }
 
 async function deelFoto() {
