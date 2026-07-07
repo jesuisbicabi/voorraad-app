@@ -697,7 +697,7 @@ function renderGroepen(rows, el, key) {
         <span class="group-item-right">
           ${exp}
           <span class="group-item-loc">${key === 'Opslagplaats' ? r['Categorieën'] : r.Opslagplaats}</span>
-          <span class="group-item-qty">${parseFloat(r.GrPerStuk) > 0 ? Math.round(r.GrPerStuk * r.Aantal) + ' gr' : r.Aantal}</span>
+          <span class="group-item-qty">${parseFloat(r.GrPerStuk) > 0 ? Math.round(parseFloat(r.GrPerStuk) * (parseFloat(r.Aantal) || 0)) + ' gr' : r.Aantal}</span>
         </span>
       </div>`;
     });
