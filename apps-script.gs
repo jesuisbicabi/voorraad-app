@@ -58,47 +58,92 @@ function readAll(sheet) {
   return {rows: rows};
 }
 
-function updateRow(sheet, data) {
-  var values = sheet.getDataRange().getValues();
-  for (var i = 1; i < values.length; i++) {
-    if (values[i][2].toString().toLowerCase() === data.Productnaam.toString().toLowerCase() &&
-        values[i][0].toString().toLowerCase() === data.Opslagplaats.toString().toLowerCase()) {
-      if (data.Aantal !== undefined) sheet.getRange(i+1, 5).setValue(data.Aantal);
-      if (data.Opslagplaats_nieuw !== undefined) sheet.getRange(i+1, 1).setValue(data.Opslagplaats_nieuw);
-      if (data.Vervaldatum !== undefined) sheet.getRange(i+1, 4).setValue(data.Vervaldatum);
-      if (data.Comment !== undefined) sheet.getRange(i+1, 6).setValue(data.Comment);
-      if (data.GrPerStuk !== undefined) sheet.getRange(i+1, 7).setValue(data.GrPerStuk);
-      if (data.Foto !== undefined) sheet.getRange(i+1, 8).setValue(data.Foto);
-      return {success: true};
+// Zoekt elke kolom op zijn kopnaam, zodat kolommen in de Sheet vrij verplaatst kunnen worden.
+// Accenten tellen niet mee: de kop met e-trema heet hier 'Categorieen'.
+function getCategorie(data) {
+  return data.Categorieen !== undefined ? data.Categorieen : data['Categorie\u00ebn'];
+}
+
+function getKolommen(headers) {
+  var kolommen = {};
+  for (var j = 0; j < headers.length; j++) {
+    var naam = headers[j].toString().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (naam) kolommen[naam] = j;
+  }
+  var verplicht = ['Opslagplaats', 'Categorieen', 'Productnaam', 'Vervaldatum', 'Aantal', 'Comment', 'GrPerStuk', 'Foto'];
+  for (var k = 0; k < verplicht.length; k++) {
+    if (kolommen[verplicht[k]] === undefined) {
+      throw new Error('Kolom "' + verplicht[k] + '" niet gevonden in de Sheet');
     }
   }
-  return {error: 'Product niet gevonden: ' + data.Productnaam + ' op ' + data.Opslagplaats};
+  return kolommen;
+}
+
+// Geeft de rij-index terug van het product op die opslagplaats, of -1.
+function zoekRij(values, kolommen, data) {
+  for (var i = 1; i < values.length; i++) {
+    if (values[i][kolommen.Productnaam].toString().toLowerCase() === data.Productnaam.toString().toLowerCase() &&
+        values[i][kolommen.Opslagplaats].toString().toLowerCase() === data.Opslagplaats.toString().toLowerCase()) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function updateRow(sheet, data) {
+  try {
+    var values = sheet.getDataRange().getValues();
+    var kolommen = getKolommen(values[0]);
+    var i = zoekRij(values, kolommen, data);
+    if (i === -1) return {error: 'Product niet gevonden: ' + data.Productnaam + ' op ' + data.Opslagplaats};
+
+    var schrijf = function(kolomNaam, waarde) {
+      if (waarde !== undefined) sheet.getRange(i + 1, kolommen[kolomNaam] + 1).setValue(waarde);
+    };
+    schrijf('Aantal', data.Aantal);
+    schrijf('Opslagplaats', data.Opslagplaats_nieuw);
+    schrijf('Vervaldatum', data.Vervaldatum);
+    schrijf('Comment', data.Comment);
+    schrijf('GrPerStuk', data.GrPerStuk);
+    schrijf('Foto', data.Foto);
+    schrijf('Categorieen', getCategorie(data));
+    return {success: true};
+  } catch(e) {
+    return {error: e.toString()};
+  }
 }
 
 function addRow(sheet, data) {
-  sheet.appendRow([
-    data.Opslagplaats || '',
-    data.Categorieën || '',
-    data.Productnaam || '',
-    data.Vervaldatum || '',
-    data.Aantal || 1,
-    data.Comment || '',
-    data.GrPerStuk || '',
-    data.Foto || ''
-  ]);
-  return {success: true};
+  try {
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var kolommen = getKolommen(headers);
+    var rij = [];
+    for (var j = 0; j < headers.length; j++) rij.push('');
+    rij[kolommen.Opslagplaats] = data.Opslagplaats || '';
+    rij[kolommen.Categorieen] = getCategorie(data) || '';
+    rij[kolommen.Productnaam] = data.Productnaam || '';
+    rij[kolommen.Vervaldatum] = data.Vervaldatum || '';
+    rij[kolommen.Aantal] = data.Aantal || 1;
+    rij[kolommen.Comment] = data.Comment || '';
+    rij[kolommen.GrPerStuk] = data.GrPerStuk || '';
+    rij[kolommen.Foto] = data.Foto || '';
+    sheet.appendRow(rij);
+    return {success: true};
+  } catch(e) {
+    return {error: e.toString()};
+  }
 }
 
 function deleteRow(sheet, data) {
-  var values = sheet.getDataRange().getValues();
-  for (var i = 1; i < values.length; i++) {
-    if (values[i][2].toString().toLowerCase() === data.Productnaam.toString().toLowerCase() &&
-        values[i][0].toString().toLowerCase() === data.Opslagplaats.toString().toLowerCase()) {
-      sheet.deleteRow(i+1);
-      return {success: true};
-    }
+  try {
+    var values = sheet.getDataRange().getValues();
+    var i = zoekRij(values, getKolommen(values[0]), data);
+    if (i === -1) return {error: 'Product niet gevonden'};
+    sheet.deleteRow(i + 1);
+    return {success: true};
+  } catch(e) {
+    return {error: e.toString()};
   }
-  return {error: 'Product niet gevonden'};
 }
 
 // Geeft de Drive-map terug; maakt hem aan als hij niet bestaat
@@ -112,19 +157,12 @@ function getFotoMap() {
 function uploadFoto(sheet, data) {
   try {
     var values = sheet.getDataRange().getValues();
-    var rij = -1;
-    var oudFileId = '';
-    for (var i = 1; i < values.length; i++) {
-      if (values[i][2].toString().toLowerCase() === data.Productnaam.toString().toLowerCase() &&
-          values[i][0].toString().toLowerCase() === data.Opslagplaats.toString().toLowerCase()) {
-        rij = i;
-        oudFileId = values[i][7] ? values[i][7].toString() : '';
-        break;
-      }
-    }
+    var kolommen = getKolommen(values[0]);
+    var rij = zoekRij(values, kolommen, data);
     if (rij === -1) return {error: 'Product niet gevonden'};
 
     // Gooi bestaand bestand weg als dat er is
+    var oudFileId = values[rij][kolommen.Foto] ? values[rij][kolommen.Foto].toString() : '';
     if (oudFileId) {
       try { DriveApp.getFileById(oudFileId).setTrashed(true); } catch(e) {}
     }
@@ -139,7 +177,7 @@ function uploadFoto(sheet, data) {
     var bestand = map.createFile(blob);
     var fileId = bestand.getId();
 
-    sheet.getRange(rij + 1, 8).setValue(fileId);
+    sheet.getRange(rij + 1, kolommen.Foto + 1).setValue(fileId);
     return {success: true, fileId: fileId};
   } catch(e) {
     return {error: e.toString()};
@@ -161,18 +199,15 @@ function getFoto(data) {
 function deleteFoto(sheet, data) {
   try {
     var values = sheet.getDataRange().getValues();
-    for (var i = 1; i < values.length; i++) {
-      if (values[i][2].toString().toLowerCase() === data.Productnaam.toString().toLowerCase() &&
-          values[i][0].toString().toLowerCase() === data.Opslagplaats.toString().toLowerCase()) {
-        var fileId = values[i][7] ? values[i][7].toString() : '';
-        if (fileId) {
-          try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {}
-        }
-        sheet.getRange(i + 1, 8).setValue('');
-        return {success: true};
-      }
+    var kolommen = getKolommen(values[0]);
+    var i = zoekRij(values, kolommen, data);
+    if (i === -1) return {error: 'Product niet gevonden'};
+    var fileId = values[i][kolommen.Foto] ? values[i][kolommen.Foto].toString() : '';
+    if (fileId) {
+      try { DriveApp.getFileById(fileId).setTrashed(true); } catch(e) {}
     }
-    return {error: 'Product niet gevonden'};
+    sheet.getRange(i + 1, kolommen.Foto + 1).setValue('');
+    return {success: true};
   } catch(e) {
     return {error: e.toString()};
   }

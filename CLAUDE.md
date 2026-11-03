@@ -20,12 +20,15 @@ GAS backend: `apps-script.gs` (Google Apps Script, apart gedeployd)
 | Kolom | Veld |
 |-------|------|
 | A | Opslagplaats |
-| B | Categorieën |
-| C | Productnaam |
-| D | Vervaldatum |
-| E | Aantal |
+| B | Productnaam |
+| C | Aantal |
+| D | GrPerStuk |
+| E | Categorieën |
 | F | Comment |
-| G | GrPerStuk |
+| G | Vervaldatum |
+| H | Foto |
+
+De volgorde mag veranderen: `apps-script.gs` zoekt kolommen op kopnaam. De kopnamen zelf en de tabnaam `Mijn voorraad` moeten gelijk blijven.
 
 ## API model
 `claude-haiku-4-5-20251001` — gekozen boven Sonnet vanwege lagere kosten; voldoende voor voorraadcommando's.
@@ -65,6 +68,13 @@ GAS backend: `apps-script.gs` (Google Apps Script, apart gedeployd)
 12. **Zoekterm koos verkeerd woord bij meerdere infoWoorden** — Opgelost 2026-04-11.
     - `infoWoorden.find(...)` pakte het eerste woord met enige match (bijv. "alle"), niet "linzen".
     - Nu: het woord met de meeste matches in productnaam + categorie wint.
+
+13. **Schrijven faalde na verplaatsen van kolommen** — Opgelost 2026-11-03.
+    - De kolommen zijn verplaatst om het aantal eerder en de vervaldatum later te zien. Het script schreef en zocht op vaste posities, dus wijzigen en verwijderen vonden geen product meer; lezen werkte wel omdat dat op kopnaam gaat.
+    - GAS: alle schrijfacties gebruiken nu `getKolommen` en `zoekRij` op kopnaam. Ontbreekt een kop, dan volgt een foutmelding en wordt er niets geschreven.
+    - GAS: de categorie kan nu ook worden gewijzigd. Bij toevoegen en wijzigen worden `Categorieën` en `Categorieen` allebei geaccepteerd.
+    - Via de connector getest op de echte Sheet: toevoegen, wijzigen en verwijderen. De voorraad-app en foto-upload zijn alleen op de nagebootste Sheet of nog niet live getest.
+    - Let op: er zijn 4 actieve implementaties. Bij een scriptwijziging moeten ze alle vier een nieuwe versie krijgen, zolang ze niet zijn opgeruimd.
 
 ## Openstaande punten
 
